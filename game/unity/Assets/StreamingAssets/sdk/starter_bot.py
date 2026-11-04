@@ -43,7 +43,7 @@ def make_policy():
 
         for inc in sorted(st.active_incidents(), key=lambda i: g.dist(st.here, i["node"])):
             eta = g.dist(st.here, inc["node"]) / me["speed"]
-            if eta < 25 and eta + 3 < inc["deadline"] - st.time and st.helpers(inc["id"]) < inc["min_people"]:
+            if (eta < 25 or inc["type"] == "generator") and eta + 3 < inc["deadline"] - st.time and st.helpers(inc["id"]) < inc["min_people"]:
                 return [goto(inc["node"]), fix(inc["id"], 20)]
 
         claimed = st.claimed_tasks()
