@@ -88,9 +88,8 @@ namespace Apocalypse
 
         public List<Node> nodes = new List<Node>();
         public List<Edge> edges = new List<Edge>();
-        public float[,] dist, zdist;
-        public int[,] next, znext;
-        public readonly List<List<int>> highways = new List<List<int>>();
+        public float[,] dist;
+        public int[,] next;
         float[] warpX = new float[0], warpY = new float[0];
         int warpW, warpH;
 
@@ -118,7 +117,7 @@ namespace Apocalypse
 
         public void Generate(System.Random rng)
         {
-            nodes.Clear(); edges.Clear(); highways.Clear();
+            nodes.Clear(); edges.Clear();
             warpW = cols / 3 + 2; warpH = rows / 3 + 2;
             warpX = new float[warpW * warpH]; warpY = new float[warpW * warpH];
             for (int k = 0; k < warpW * warpH; k++)
@@ -170,10 +169,8 @@ namespace Apocalypse
                 else AddEdge(r * cols + c + 1, (r + 1) * cols + c, false);
             }
 
-            BuildHighway(rng, true);
-            BuildHighway(rng, false);
 
-            var candidates = edges.Where(e => !e.bridge && e.kind == 0).OrderBy(_ => rng.Next()).Take(edges.Count).ToList();
+            var candidates = edges.Where(e => !e.bridge).OrderBy(_ => rng.Next()).Take(edges.Count).ToList();
             foreach (var e in candidates)
             {
                 if (nodes[e.a].edges.Count <= 2 || nodes[e.b].edges.Count <= 2) continue;
@@ -184,48 +181,6 @@ namespace Apocalypse
 
             AssignTypes(rng);
             Recompute();
-        }
-
-        public const float HighwayMul = 1.6f;
-
-        static int[] Arc(int n, int lo, int hi, System.Random rng)
-        {
-            int a = lo + rng.Next(hi - lo + 1), b = lo + rng.Next(hi - lo + 1);
-            int sign = rng.Next(2) * 2 - 1, amp = 1 + rng.Next(2);
-            var line = new int[n];
-            for (int i = 0; i < n; i++)
-            {
-                int v = (a * (n - 1 - i) + b * i) / (n - 1) + sign * (amp * 4 * i * (n - 1 - i) / ((n - 1) * (n - 1)));
-                v = Mathf.Clamp(v, lo, hi);
-                if (i > 0) v = Mathf.Clamp(v, line[i - 1] - 1, line[i - 1] + 1);
-                line[i] = v;
-            }
-            return line;
-        }
-
-        void BuildHighway(System.Random rng, bool horizontal)
-        {
-            int n = horizontal ? cols : rows;
-            var line = Arc(n, 1, (horizontal ? rows : cols) - 2, rng);
-            int At(int i) => horizontal ? line[i] * cols + i : i * cols + line[i];
-            var run = new List<int> { At(0) };
-            for (int i = 0; i + 1 < n; i++)
-            {
-                int a = At(i), b = At(i + 1);
-                bool straight = line[i] == line[i + 1];
-                int r = horizontal ? Mathf.Min(line[i], line[i + 1]) : i, c = horizontal ? i : Mathf.Min(line[i], line[i + 1]);
-                bool ok = straight ? !Cut(a, b) : !RiverInCell(r, c);
-                if (!ok)
-                {
-                    if (run.Count > 1) highways.Add(run);
-                    run = new List<int> { b };
-                    continue;
-                }
-                var e = FindEdge(a, b) ?? AddEdge(a, b, false);
-                if (e.kind == 0) { e.kind = 1; e.length /= HighwayMul; }
-                run.Add(b);
-            }
-            if (run.Count > 1) highways.Add(run);
         }
 
         Vector2Int Entry(int side, System.Random rng)
@@ -386,11 +341,10 @@ namespace Apocalypse
 
         public void Recompute()
         {
-            Floyd(false, out dist, out next);
-            zdist = dist; znext = next;
+            Floyd(out dist, out next);
         }
 
-        void Floyd(bool zombie, out float[,] dist, out int[,] next)
+        void Floyd(out float[,] dist, out int[,] next)
         {
             int n = nodes.Count;
             dist = new float[n, n];
@@ -399,7 +353,7 @@ namespace Apocalypse
                 for (int j = 0; j < n; j++) { dist[i, j] = i == j ? 0 : Inf; next[i, j] = i == j ? i : -1; }
             foreach (var e in edges)
             {
-                if (e.blocked || (zombie && e.kind == 2)) continue;
+                if (e.blocked) continue;
                 dist[e.a, e.b] = dist[e.b, e.a] = e.length;
                 next[e.a, e.b] = e.b; next[e.b, e.a] = e.a;
             }
@@ -416,7 +370,6 @@ namespace Apocalypse
         }
 
         public List<int> Path(int from, int to) => Walk(next, from, to);
-        public List<int> ZPath(int from, int to) => Walk(znext, from, to);
 
         static List<int> Walk(int[,] next, int from, int to)
         {

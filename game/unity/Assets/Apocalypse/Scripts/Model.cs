@@ -28,7 +28,6 @@ namespace Apocalypse
         public int id, a, b;
         public float length;
         public bool bridge;
-        public int kind;
         public bool blocked;
         public float blockedUntil;
         public int Other(int n) => n == a ? b : a;
