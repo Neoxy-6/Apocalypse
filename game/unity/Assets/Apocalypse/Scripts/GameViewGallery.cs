@@ -83,6 +83,8 @@ namespace Apocalypse
                 var f = map.nodes.FirstOrDefault(x => x.type == NodeType.Factory);
                 if (f != null) yield return Shot("factory_on", FacilityPos(f.id), 2.8f, 3f);
             }
+            var arm = map.nodes.FirstOrDefault(x => x.type == NodeType.Armory);
+            if (arm != null) yield return Shot("armory", FacilityPos(arm.id) + new Vector2(0.6f, 0.6f), 3.2f);
 
             galleryNoFade = false;
             Sim.incidents.Clear();

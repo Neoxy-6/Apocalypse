@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace Apocalypse
@@ -17,7 +18,157 @@ namespace Apocalypse
                 case NodeType.Supply: SupplyDepot(root, n); break;
                 case NodeType.Factory: Factory(root, n); break;
                 case NodeType.Generator: Generator(root, n); break;
+                case NodeType.Armory: Armory(root, n); break;
             }
+        }
+
+        readonly Dictionary<int, (int from, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3)> curves = new Dictionary<int, (int, Vector2, Vector2, Vector2, Vector2)>();
+
+        static Vector2 CatmullRom(Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, float t)
+        {
+            float t2 = t * t, t3 = t2 * t;
+            return 0.5f * (2f * p1 + (p2 - p0) * t + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 + (3f * p1 - p0 - 3f * p2 + p3) * t3);
+        }
+
+        Vector2 RoadPoint(int from, int to, float t)
+        {
+            var e = Sim.map.FindEdge(from, to);
+            if (e != null && curves.TryGetValue(e.id, out var c))
+                return from == c.from ? CatmullRom(c.p0, c.p1, c.p2, c.p3, t) : CatmullRom(c.p0, c.p1, c.p2, c.p3, 1f - t);
+            return Vector2.Lerp(Sim.map.nodes[from].pos, Sim.map.nodes[to].pos, t);
+        }
+
+        void BuildHighways(CityMap map)
+        {
+            curves.Clear();
+            const int samples = 12;
+            foreach (var chain in map.highways)
+            {
+                var pts = chain.Select(id => map.nodes[id].pos).ToList();
+                var glow = new List<Vector2>();
+                for (int i = 0; i + 1 < chain.Count; i++)
+                {
+                    var e = map.FindEdge(chain[i], chain[i + 1]);
+                    if (e == null) continue;
+                    Vector2 p1 = pts[i], p2 = pts[i + 1];
+                    Vector2 p0 = i > 0 ? pts[i - 1] : 2f * p1 - p2, p3 = i + 2 < pts.Count ? pts[i + 2] : 2f * p2 - p1;
+                    curves[e.id] = (chain[i], p0, p1, p2, p3);
+                    var lr = roads[e.id];
+                    lr.positionCount = samples + 1;
+                    for (int k = 0; k <= samples; k++)
+                    {
+                        var q = CatmullRom(p0, p1, p2, p3, k / (float)samples);
+                        lr.SetPosition(k, W(q, 0.012f));
+                        if (k > 0 || glow.Count == 0) glow.Add(q);
+                    }
+                }
+                if (glow.Count < 2) continue;
+                var line = NewLine(mapRoot, 0.12f, 3);
+                line.positionCount = glow.Count;
+                for (int i = 0; i < glow.Count; i++) line.SetPosition(i, W(glow[i], 0.014f));
+                line.startColor = line.endColor = new Color(0.85f, 0.9f, 1f);
+            }
+        }
+
+        static readonly Dictionary<NodeType, Color> MarkerColors = new Dictionary<NodeType, Color>
+        {
+            [NodeType.Hospital] = new Color(0.92f, 0.18f, 0.22f), [NodeType.Supply] = new Color(0.2f, 0.75f, 0.35f),
+            [NodeType.Factory] = new Color(1f, 0.55f, 0.1f), [NodeType.Generator] = new Color(1f, 0.85f, 0.1f),
+            [NodeType.Armory] = new Color(0.62f, 0.2f, 0.85f),
+        };
+
+        void Marker(Node n, Vector2 fp)
+        {
+            if (!MarkerColors.TryGetValue(n.type, out var c)) return;
+            var ring = Flat(mapRoot, circle, new Color(c.r, c.g, c.b, 0.35f), 3.4f, 8, 0.03f);
+            ring.transform.position = W(fp, 0.03f);
+            var g = new GameObject("marker").transform;
+            g.SetParent(mapRoot, false);
+            var top = W(fp, 3.3f);
+            g.position = top;
+            g.rotation = cam.transform.rotation;
+            g.localScale = Vector3.one * 1.3f;
+            var white = Color.white;
+            Part(g, PrimitiveType.Cylinder, c, Vector3.zero, new Vector3(1.0f, 0.05f, 1.0f), new Vector3(90f, 0, 0), true);
+            Part(g, PrimitiveType.Cylinder, white, new Vector3(0, 0, 0.01f), new Vector3(1.12f, 0.04f, 1.12f), new Vector3(90f, 0, 0), true);
+            var front = new Vector3(0, 0, -0.06f);
+            switch (n.type)
+            {
+                case NodeType.Hospital:
+                case NodeType.Supply:
+                    Part(g, PrimitiveType.Cube, white, front, new Vector3(0.55f, 0.16f, 0.02f), default, true);
+                    Part(g, PrimitiveType.Cube, white, front, new Vector3(0.16f, 0.55f, 0.02f), default, true);
+                    break;
+                case NodeType.Generator:
+                    Part(g, PrimitiveType.Cube, new Color(0.12f, 0.12f, 0.12f), front + new Vector3(0.06f, 0.12f, 0), new Vector3(0.12f, 0.36f, 0.02f), new Vector3(0, 0, -28f), true);
+                    Part(g, PrimitiveType.Cube, new Color(0.12f, 0.12f, 0.12f), front + new Vector3(-0.06f, -0.12f, 0), new Vector3(0.12f, 0.36f, 0.02f), new Vector3(0, 0, -28f), true);
+                    break;
+                case NodeType.Factory:
+                    Part(g, PrimitiveType.Cylinder, new Color(0.15f, 0.12f, 0.1f), front, new Vector3(0.42f, 0.02f, 0.42f), new Vector3(90f, 0, 0), true);
+                    for (int i = 0; i < 6; i++)
+                        Part(g, PrimitiveType.Cube, new Color(0.15f, 0.12f, 0.1f), front, new Vector3(0.12f, 0.6f, 0.02f), new Vector3(0, 0, i * 30f), true);
+                    Part(g, PrimitiveType.Cylinder, c, front + new Vector3(0, 0, -0.01f), new Vector3(0.16f, 0.02f, 0.16f), new Vector3(90f, 0, 0), true);
+                    break;
+                case NodeType.Armory:
+                    for (int i = -1; i <= 1; i++)
+                    {
+                        var x = new Vector3(i * 0.22f, 0, 0);
+                        Part(g, PrimitiveType.Cube, new Color(0.85f, 0.6f, 0.2f), front + x + new Vector3(0, -0.12f, 0), new Vector3(0.14f, 0.26f, 0.02f), default, true);
+                        Part(g, PrimitiveType.Cube, new Color(0.6f, 0.4f, 0.12f), front + x + new Vector3(0, -0.27f, -0.005f), new Vector3(0.16f, 0.05f, 0.02f), default, true);
+                        Part(g, PrimitiveType.Cube, new Color(0.78f, 0.78f, 0.8f), front + x + new Vector3(0, 0.07f, 0), new Vector3(0.11f, 0.14f, 0.02f), default, true);
+                        Part(g, PrimitiveType.Sphere, new Color(0.78f, 0.78f, 0.8f), front + x + new Vector3(0, 0.15f, 0), new Vector3(0.11f, 0.14f, 0.02f), default, true);
+                    }
+                    break;
+            }
+            foreach (var r in g.GetComponentsInChildren<Renderer>()) r.sortingOrder = 20;
+            float phase = n.id * 0.7f;
+            facilityAnims.Add(t => g.position = top + Vector3.up * Mathf.Sin(t * 2f + phase) * 0.12f);
+        }
+
+        void Armory(Transform root, Node n)
+        {
+            var wall = new Color(0.33f, 0.37f, 0.3f);
+            var roof = new Color(0.22f, 0.25f, 0.2f);
+            var red = new Color(0.75f, 0.16f, 0.12f);
+            var dark = new Color(0.14f, 0.15f, 0.15f);
+            Part(root, PrimitiveType.Cube, wall, new Vector3(0, 0.55f, 0.15f), new Vector3(1.6f, 1.1f, 1.15f));
+            Part(root, PrimitiveType.Cube, roof, new Vector3(0, 1.16f, 0.15f), new Vector3(1.75f, 0.12f, 1.3f));
+            Part(root, PrimitiveType.Cube, red, new Vector3(0, 0.88f, -0.43f), new Vector3(1.62f, 0.12f, 0.02f));
+            Part(root, PrimitiveType.Cube, dark, new Vector3(0, 0.36f, -0.43f), new Vector3(0.55f, 0.72f, 0.02f));
+            for (int i = 0; i < 4; i++)
+                Part(root, PrimitiveType.Cube, new Color(0.62f, 0.55f, 0.38f), new Vector3(-0.75f + i * 0.5f, 0.1f, -0.75f), new Vector3(0.45f, 0.2f, 0.22f));
+            var guns = new List<GameObject>();
+            for (int i = 0; i < gm.cfg.weaponStock; i++)
+                guns.Add(Part(root, PrimitiveType.Cube, dark, new Vector3(0.45f + i * 0.2f, 0.45f, -0.47f), new Vector3(0.06f, 0.62f, 0.06f), new Vector3(0, 0, 8f)));
+            facilityAnims.Add(t => { for (int i = 0; i < guns.Count; i++) if (guns[i].activeSelf != (i < n.weapons)) guns[i].SetActive(i < n.weapons); });
+        }
+
+        float lastPlayerShot = -1f;
+        readonly List<(LineRenderer line, float until)> tracers = new List<(LineRenderer, float)>();
+
+        void UpdatePlayerShots()
+        {
+            float now = Time.unscaledTime;
+            if (Sim.time < lastPlayerShot) lastPlayerShot = -1f;
+            foreach (var (from, to, time) in Sim.playerShots)
+            {
+                if (time <= lastPlayerShot) continue;
+                lastPlayerShot = time;
+                Burst(W(to, 0.5f), new Color(1f, 0.85f, 0.4f, 1f), new Color(1f, 0.5f, 0.2f, 0.8f), 10, 2.2f, 0.07f, 0.3f, 0.5f, 0.1f);
+                var lr = NewLine(dynRoot, 0.05f, 9);
+                lr.startColor = new Color(1f, 0.95f, 0.6f, 1f);
+                lr.endColor = new Color(1f, 0.7f, 0.3f, 0.6f);
+                lr.alignment = LineAlignment.View;
+                lr.SetPosition(0, W(from, 0.6f));
+                lr.SetPosition(1, W(to, 0.5f));
+                tracers.Add((lr, now + 0.12f));
+            }
+            for (int i = tracers.Count - 1; i >= 0; i--)
+                if (tracers[i].line == null || now > tracers[i].until)
+                {
+                    if (tracers[i].line != null) Destroy(tracers[i].line.gameObject);
+                    tracers.RemoveAt(i);
+                }
         }
 
         void Hospital(Transform root)

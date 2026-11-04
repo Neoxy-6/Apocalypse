@@ -35,8 +35,9 @@ namespace Apocalypse
                 if (a.x > b.x) (a, b) = (b, a);
                 var dir = (b - a).normalized;
                 float total = (b - a).magnitude;
-                Vector2 mid = Vector2.Lerp(a, b, Mathf.InverseLerp(a.x, b.x, map.RiverX));
-                float len = Mathf.Min(3.8f / Mathf.Max(0.5f, Mathf.Abs(dir.x)), total - 2f * RampLen - 0.6f);
+                Vector2 mid = Vector2.Lerp(a, b, CityMap.CrossT(riverLine, a, b, out var flow));
+                float across = Mathf.Abs(dir.x * flow.y - dir.y * flow.x);
+                float len = Mathf.Min(3.8f / Mathf.Max(0.5f, across), total - 2f * RampLen - 0.6f);
                 float half = len / 2f;
                 bridgeSpans.Add((mid, dir, half));
 
@@ -69,8 +70,8 @@ namespace Apocalypse
                         Part(Mathf.Abs(z) < seg / 2f ? gap : g, PrimitiveType.Cube, rail, new Vector3(s * 0.46f, DeckH + 0.06f, z), new Vector3(0.04f, 0.12f, 0.04f));
 
                 float rampLen = Mathf.Sqrt(RampLen * RampLen + DeckH * DeckH), pitch = Mathf.Atan2(DeckH, RampLen) * Mathf.Rad2Deg;
-                Part(g, PrimitiveType.Cube, deck, new Vector3(0, DeckH / 2f - 0.04f, -half - RampLen / 2f), new Vector3(0.95f, 0.08f, rampLen), new Vector3(pitch, 0, 0));
-                Part(g, PrimitiveType.Cube, deck, new Vector3(0, DeckH / 2f - 0.04f, half + RampLen / 2f), new Vector3(0.95f, 0.08f, rampLen), new Vector3(-pitch, 0, 0));
+                Part(g, PrimitiveType.Cube, deck, new Vector3(0, DeckH / 2f - 0.04f, -half - RampLen / 2f), new Vector3(0.95f, 0.08f, rampLen), new Vector3(-pitch, 0, 0));
+                Part(g, PrimitiveType.Cube, deck, new Vector3(0, DeckH / 2f - 0.04f, half + RampLen / 2f), new Vector3(0.95f, 0.08f, rampLen), new Vector3(pitch, 0, 0));
 
                 for (int s = -1; s <= 1; s += 2)
                     for (int end = -1; end <= 1; end += 2)

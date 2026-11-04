@@ -111,7 +111,7 @@ namespace Apocalypse
             Pill(tagR, WcBeige);
             GUI.Label(tagR, $"<color=#3a3233>{tag}</color>", wcTag);
             if (fuelPhase)
-                GUI.Label(new Rect(tagR.xMax + 14, tagR.y + 2, 400, 28), "<color=#ff8a75>現在倒地就無法復活</color>", wcSmall);
+                GUI.Label(new Rect(tagR.xMax + 14, tagR.y + 2, 400, 28), "<color=#ff8a75>安全區外倒地就無法復活</color>", wcSmall);
 
             string clock = Clock(Sim.TimeLeft);
             int lead = 0;
@@ -235,7 +235,7 @@ namespace Apocalypse
                 Pill(new Rect(x + 14, y + 15, 12, 12), c);
                 GUI.Label(new Rect(x + 34, y, 170, rowH - 18), $"<color=#f6f1ee>{inc.name}</color>", wcName);
                 string ppl = inc.workers > 0 ? $"<color=#9be7b0>{inc.workers} 人</color>  " : "";
-                string when = inc.kind == "generator" ? "<color=#ff8a75>待修</color>" : $"<color={(left < 15 ? "#ff8a75" : WcBeigeHex)}>{Clock(Mathf.Max(0, left))}</color>";
+                string when = inc.kind == "generator" || inc.kind == "bridge" ? "<color=#ff8a75>待修</color>" : $"<color={(left < 15 ? "#ff8a75" : WcBeigeHex)}>{Clock(Mathf.Max(0, left))}</color>";
                 GUI.Label(new Rect(x + w - 150, y, 136, rowH - 18), $"{ppl}{when}",
                           new GUIStyle(wcSmall) { fontSize = 16, alignment = TextAnchor.MiddleRight });
                 var bar = new Rect(x + 34, y + rowH - 20, w - 52, 6);
@@ -283,6 +283,7 @@ namespace Apocalypse
                 case "down": return ("倒地", new Color(1f, 0.60f, 0.48f));
                 case "eliminated": return ("淘汰", new Color(1f, 0.45f, 0.42f));
                 case "outbreak": case "failure": return ("警報", new Color(1f, 0.55f, 0.42f));
+                case "roadblock": return ("封路", new Color(1f, 0.55f, 0.42f));
                 case "combo": return ("連續得分", new Color(0.98f, 0.85f, 0.50f));
                 case "supply": case "repair": case "batch": return ("物資", WcBeige);
                 case "join": return ("加入", new Color(0.62f, 0.78f, 0.95f));

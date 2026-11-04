@@ -205,10 +205,40 @@ namespace Apocalypse
             em.rateOverTime = lift > 0.01f ? Mathf.Lerp(120f, 0f, lift / 6f) : soon ? 40f : spinning ? 6f : 0f;
         }
 
+        List<Vector2> riverLine = new List<Vector2>();
+
+        void BuildRiver(CityMap map, Vector2 size)
+        {
+            var verts = new List<Vector3>(); var tris = new List<int>();
+            for (int i = 0; i < riverLine.Count; i++)
+            {
+                var t = (riverLine[Mathf.Min(i + 1, riverLine.Count - 1)] - riverLine[Mathf.Max(i - 1, 0)]).normalized;
+                var n = new Vector2(t.y, -t.x) * 1.3f;
+                var p = riverLine[i];
+                verts.Add(new Vector3(p.x - n.x, 0.015f, p.y - n.y)); verts.Add(new Vector3(p.x + n.x, 0.015f, p.y + n.y));
+                int b = verts.Count - 4;
+                if (b >= 0) tris.AddRange(new[] { b, b + 1, b + 2, b + 1, b + 3, b + 2, b, b + 2, b + 1, b + 1, b + 2, b + 3 });
+            }
+            var mesh = new Mesh();
+            mesh.SetVertices(verts); mesh.SetTriangles(tris, 0);
+            mesh.SetNormals(verts.Select(_ => Vector3.up).ToList());
+            mesh.RecalculateBounds();
+            var go = new GameObject("river");
+            go.transform.SetParent(mapRoot, false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterial = LitMat(RiverColor);
+        }
+
         void BuildRiverFx(CityMap map, Vector2 size)
         {
-            Particles(mapRoot, new Vector3(map.RiverX, 0.04f, size.y / 2f), new Color(0.65f, 0.85f, 1f, 0.5f), new Color(0.4f, 0.6f, 0.9f, 0.35f),
-                      size.y * 1.2f, 3f, 0.02f, 0.14f, 0f, new Vector3(2.2f, size.y + 6f, 0.02f), 0.25f, 0f, 2);
+            for (int i = 0; i + 1 < map.river.Count; i++)
+            {
+                Vector2 a = new Vector2(map.river[i].x - 0.5f, map.river[i].y - 0.5f) * map.spacing, b = new Vector2(map.river[i + 1].x - 0.5f, map.river[i + 1].y - 0.5f) * map.spacing;
+                var mid = (a + b) / 2f;
+                bool horizontal = Mathf.Abs(b.x - a.x) > Mathf.Abs(b.y - a.y);
+                Particles(mapRoot, new Vector3(mid.x, 0.04f, mid.y), new Color(0.65f, 0.85f, 1f, 0.5f), new Color(0.4f, 0.6f, 0.9f, 0.35f),
+                          map.spacing * 1.2f, 3f, 0.02f, 0.14f, 0f, horizontal ? new Vector3(map.spacing, 2.2f, 0.02f) : new Vector3(2.2f, map.spacing, 0.02f), 0.25f, 0f, 2);
+            }
         }
 
         static readonly Color CapyFur = new Color(0.66f, 0.48f, 0.32f), CapyDark = new Color(0.40f, 0.28f, 0.19f);
@@ -282,6 +312,11 @@ namespace Apocalypse
 
             v.helmet = Part(v.head, PrimitiveType.Sphere, p.color * 0.9f, new Vector3(0, 0.36f, -0.03f), new Vector3(0.4f, 0.2f, 0.4f)).GetComponent<Renderer>();
             Part(v.head, PrimitiveType.Sphere, new Color(0.9f, 0.88f, 0.84f), new Vector3(0, 0.47f, -0.03f), Vector3.one * 0.1f);
+            v.gun = new GameObject("gun");
+            v.gun.transform.SetParent(v.armR, false);
+            Part(v.gun.transform, PrimitiveType.Cube, new Color(0.16f, 0.17f, 0.18f), new Vector3(0, -0.3f, 0.18f), new Vector3(0.07f, 0.09f, 0.5f));
+            Part(v.gun.transform, PrimitiveType.Cube, new Color(0.35f, 0.24f, 0.14f), new Vector3(0, -0.36f, -0.05f), new Vector3(0.06f, 0.14f, 0.12f));
+            v.gun.SetActive(false);
             v.glow = Flat(dynRoot, soft, new Color(p.color.r, p.color.g, p.color.b, 0.35f), 2.0f, 5, 0.03f);
             v.dust = Particles(v.body.transform, Vector3.zero, new Color(0.55f, 0.5f, 0.45f, 0.45f), new Color(0.4f, 0.38f, 0.35f, 0.35f), 0f, 0.7f, 0.4f, 0.25f, -0.05f, new Vector3(0.2f, 0.2f, 0.05f), 0.2f, 0f, 5);
             v.lastPos = p.pos;
@@ -313,6 +348,7 @@ namespace Apocalypse
             v.lastPos = p.pos;
             bool downed = p.state == PlayerState.Downed;
             bool moving = !downed && delta.sqrMagnitude > 1e-6f;
+            if (v.gun != null && v.gun.activeSelf != (p.ammo > 0)) v.gun.SetActive(p.ammo > 0);
             if (moving)
             {
                 v.facing = Quaternion.Slerp(v.facing, Quaternion.LookRotation(new Vector3(delta.x, 0, delta.y)), 1f - Mathf.Exp(-10f * dt));

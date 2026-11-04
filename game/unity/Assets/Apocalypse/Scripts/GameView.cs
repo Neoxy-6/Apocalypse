@@ -17,6 +17,7 @@ namespace Apocalypse
             public Renderer[] parts; public Color[] baseColors; public float lastHp = 100f, flash, lastHitFx = -9f;
             public Renderer eyeL, eyeR; public SpriteRenderer swirlL, swirlR; public float deadAt = -1f;
             public readonly List<Vector3> trail = new List<Vector3>();
+            public GameObject gun;
         }
         class ZombieView
         {
@@ -30,6 +31,7 @@ namespace Apocalypse
         static readonly Color Bg = new Color(0.035f, 0.045f, 0.08f);
         static readonly Color GridColor = new Color(0.30f, 0.42f, 0.65f, 0.16f);
         static readonly Color RoadColor = new Color(0.24f, 0.33f, 0.48f);
+        static readonly Color HighwayColor = new Color(0.42f, 0.56f, 0.78f), MudColor = new Color(0.45f, 0.32f, 0.18f);
         static readonly Color BridgeColor = new Color(0.50f, 0.62f, 0.80f);
         static readonly Color BlockedColor = new Color(0.85f, 0.18f, 0.18f);
         static readonly Color RiverColor = new Color(0.05f, 0.11f, 0.22f);
@@ -195,9 +197,9 @@ namespace Apocalypse
             var map = Sim.map;
             Vector2 size = map.Size;
 
+            riverLine = map.RiverLine();
             BuildGround(map, size);
-            var river = Solid(PrimitiveType.Cube, mapRoot, RiverColor, new Vector3(2.6f, 0.05f, size.y + 6f));
-            river.transform.position = new Vector3(map.RiverX, -0.01f, size.y / 2f);
+            BuildRiver(map, size);
             BuildRiverFx(map, size);
 
             float m = 3f;
@@ -222,11 +224,12 @@ namespace Apocalypse
 
             foreach (var e in map.edges)
             {
-                var lr = NewLine(mapRoot, e.bridge ? 0.7f : 0.75f, 2);
+                var lr = NewLine(mapRoot, e.bridge ? 0.7f : e.kind == 1 ? 1.15f : e.kind == 2 ? 0.6f : 0.75f, 2);
                 lr.SetPosition(0, W(map.nodes[e.a].pos, 0.01f));
                 lr.SetPosition(1, W(map.nodes[e.b].pos, 0.01f));
                 roads[e.id] = lr;
             }
+            BuildHighways(map);
             BuildBridges();
 
             PlaceFacilities();
@@ -396,7 +399,7 @@ namespace Apocalypse
                     for (int dr = -1; dr <= 0; dr++)
                     {
                         int c = c0 + dc, r = r0 + dr;
-                        if (c < 0 || r < 0 || c >= map.cols - 1 || r >= map.rows - 1 || c == map.riverCol) continue;
+                        if (c < 0 || r < 0 || c >= map.cols - 1 || r >= map.rows - 1 || map.RiverInCell(r, c)) continue;
                         Vector2 center = (map.nodes[r * map.cols + c].pos + map.nodes[r * map.cols + c + 1].pos +
                                           map.nodes[(r + 1) * map.cols + c].pos + map.nodes[(r + 1) * map.cols + c + 1].pos) / 4f;
                         var dir = (center - n.pos).normalized;
@@ -428,6 +431,11 @@ namespace Apocalypse
             root.position = W(fp);
             root.rotation = Quaternion.Euler(0, FacingYaw(n.pos, fp), 0);
             BuildFacilityArt(n, root);
+            if (n.type != NodeType.Shelter)
+            {
+                root.localScale = Vector3.one * 1.25f;
+                Marker(n, fp);
+            }
         }
 
         void LateUpdate()
@@ -447,7 +455,7 @@ namespace Apocalypse
                     kv.Value.material.color = map.nodes[kv.Key].medkits > 0 ? new Color(1.0f, 0.84f, 0.31f) : new Color(0.45f, 0.40f, 0.25f);
             foreach (var e in map.edges)
             {
-                var c = e.blocked ? BlockedColor : e.bridge ? BridgeColor : RoadColor;
+                var c = e.blocked ? BlockedColor : e.bridge ? BridgeColor : e.kind == 1 ? HighwayColor : e.kind == 2 ? MudColor : RoadColor;
                 roads[e.id].startColor = roads[e.id].endColor = c;
             }
 
@@ -985,7 +993,7 @@ namespace Apocalypse
                 var ic = IncidentColor(inc.kind);
                 float left = inc.deadline - Sim.time;
                 string people = inc.workers > 0 ? $"  <color={Good}>{inc.workers} 人</color>" : "";
-                string when = inc.kind == "generator" ? $"<color={Bad}>待修</color>"
+                string when = inc.kind == "generator" || inc.kind == "bridge" ? $"<color={Bad}>待修</color>"
                             : $"<color={(left < 15 ? Bad : "#dfe6f3")}>{Clock(left)}</color>";
                 string text = $"<b><color=#{Hex(ic)}>{inc.name}</color></b>  {when}{people}";
                 float cw = Mathf.Max(150f, small.CalcSize(new GUIContent(text)).x + 22f);
@@ -1075,7 +1083,7 @@ namespace Apocalypse
         {
             GUI.Label(new Rect(28, 16, 900, 18), $"<color={Muted}>{Spaced("加入遊戲")}</color>", tiny);
             GUI.Label(new Rect(28, 32, 900, 24), $"<color={Accent}>{JoinUrl}</color>", label);
-            int wt = Sim.map.nodes[0].district, et = Sim.map.nodes[Sim.map.cols - 1].district;
+            int wt = Sim.map.nodes[0].district, et = Sim.map.nodes[Sim.map.EastNode].district;
             string area = wt == et ? GameSim.DistrictNames[wt] : $"{GameSim.DistrictNames[wt]} × {GameSim.DistrictNames[et]}";
             GUI.Label(new Rect(28, 58, 600, 18), $"<color={Muted}>{Spaced("地圖種子")}</color>  <b>{gm.cfg.seed}</b>   <color={Muted}>{Spaced("地區")}</color>  <b>{area}</b>", tiny);
 
@@ -1085,7 +1093,7 @@ namespace Apocalypse
                 GUI.Label(new Rect(W / 2f - 400, 8, 800, 84),
                     $"<color=#ff7043>{Mathf.Min(Sim.fuel, Sim.fuelRequired)}</color><size=34><color={Muted}> / {Sim.fuelRequired} 桶油</color></size>", hero);
                 GUI.Label(new Rect(W / 2f - 400, 88, 800, 22),
-                    $"<color={Bad}>{Spaced("現在倒地就無法復活")}</color>", CenterSmall());
+                    $"<color={Bad}>{Spaced("安全區外倒地就無法復活")}</color>", CenterSmall());
             }
             else
             {
@@ -1300,7 +1308,7 @@ namespace Apocalypse
                 case "combo": return "★";
                 case "urgent": case "supply": return "★";
                 case "down": case "fail": case "eliminated": case "incident_fail": return "✕";
-                case "outbreak": case "failure": case "incident": return "▲";
+                case "outbreak": case "failure": case "incident": case "roadblock": return "▲";
                 default: return "·";
             }
         }

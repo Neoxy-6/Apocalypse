@@ -148,15 +148,15 @@ namespace Apocalypse
             for (int r = 0; r < map.rows - 1; r++)
                 for (int c = 0; c < map.cols - 1; c++)
                 {
-                    if (c == map.riverCol) continue;
+                    if (map.RiverInCell(r, c)) continue;
                     int theme = map.nodes[r * map.cols + c].district;
 
-                    int wTheme = map.nodes[0].district, eTheme = map.nodes[map.cols - 1].district;
+                    int wTheme = map.nodes[0].district, eTheme = map.nodes[map.EastNode].district;
                     if (wTheme != eTheme)
                     {
-                        int fromRiver = c < map.riverCol ? map.riverCol - 1 - c : c - map.riverCol - 1;
+                        int fromRiver = map.river.Min(d => Mathf.Max(Mathf.Abs(d.x - 1 - c), Mathf.Abs(d.y - 1 - r))) - 1;
                         float mix = fromRiver == 0 ? 0.45f : fromRiver == 1 ? 0.2f : 0f;
-                        if (new System.Random(gm.cfg.seed * 31 + r * 7 + c).NextDouble() < mix) theme = c < map.riverCol ? eTheme : wTheme;
+                        if (new System.Random(gm.cfg.seed * 31 + r * 7 + c).NextDouble() < mix) theme = theme == wTheme ? eTheme : wTheme;
                     }
                     Vector2 center = (map.nodes[r * map.cols + c].pos + map.nodes[r * map.cols + c + 1].pos +
                                       map.nodes[(r + 1) * map.cols + c].pos + map.nodes[(r + 1) * map.cols + c + 1].pos) / 4f;
@@ -172,16 +172,19 @@ namespace Apocalypse
                 }
 
             Vector2 size = map.Size;
-            int west = map.nodes[0].district, east = map.nodes[map.cols - 1].district;
-            SideFx(west, -3f, map.RiverX - 1.3f, size);
-            SideFx(east, map.RiverX + 1.3f, size.x + 3f, size);
+            int west = map.nodes[0].district, east = map.nodes[map.EastNode].district;
+            foreach (bool w in new[] { true, false })
+            {
+                var side = map.nodes.Where(n => map.West(n.id) == w).Select(n => n.pos).ToList();
+                SideFx(w ? west : east, side.Min(q => q.x) - 2f, side.Max(q => q.x) + 2f, side.Min(q => q.y) - 2f, side.Max(q => q.y) + 2f);
+            }
 
         }
 
-        void SideFx(int theme, float x0, float x1, Vector2 size)
+        void SideFx(int theme, float x0, float x1, float z0, float z1)
         {
-            float cx = (x0 + x1) / 2f, w = x1 - x0, d = size.y + 6f;
-            var at = new Vector3(cx, 0, size.y / 2f);
+            float cx = (x0 + x1) / 2f, w = x1 - x0, d = z1 - z0;
+            var at = new Vector3(cx, 0, (z0 + z1) / 2f);
             switch (theme)
             {
                 case 0:
@@ -199,20 +202,29 @@ namespace Apocalypse
 
         void BuildGround(CityMap map, Vector2 size)
         {
-            int west = map.nodes[0].district, east = map.nodes[map.cols - 1].district;
+            int west = map.nodes[0].district, east = map.nodes[map.EastNode].district;
             float x0 = -3f, x1 = size.x + 3f, z0 = -3f, z1 = size.y + 3f, band = map.spacing * 1.6f;
             var lit = new Color(1.1f, 1.17f, 1.33f);
-            const int steps = 60;
+            const int steps = 60, zSteps = 40;
             var verts = new List<Vector3>(); var cols = new List<Color>(); var tris = new List<int>();
-            for (int i = 0; i <= steps; i++)
+            for (int j = 0; j <= zSteps; j++)
             {
-                float x = Mathf.Lerp(x0, x1, i / (float)steps);
-                float k = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(map.RiverX - band, map.RiverX + band, x));
-                var c = Color.Lerp(ThemeGround[west], ThemeGround[east], k);
-                c = new Color(c.r * lit.r, c.g * lit.g, c.b * lit.b, 1f);
-                verts.Add(new Vector3(x, 0f, z0)); verts.Add(new Vector3(x, 0f, z1));
-                cols.Add(c); cols.Add(c);
-                if (i > 0) { int b = (i - 1) * 2; tris.AddRange(new[] { b, b + 1, b + 2, b + 1, b + 3, b + 2 }); }
+                float z = Mathf.Lerp(z0, z1, j / (float)zSteps);
+                for (int i = 0; i <= steps; i++)
+                {
+                    float x = Mathf.Lerp(x0, x1, i / (float)steps);
+                    var q = new Vector2(x, z);
+                    float d = CityMap.RiverDistance(riverLine, q) * (map.WestAt(q) ? -1f : 1f);
+                    float k = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(-band, band, d));
+                    var c = Color.Lerp(ThemeGround[west], ThemeGround[east], k);
+                    verts.Add(new Vector3(x, 0f, z));
+                    cols.Add(new Color(c.r * lit.r, c.g * lit.g, c.b * lit.b, 1f));
+                    if (i > 0 && j > 0)
+                    {
+                        int b = (j - 1) * (steps + 1) + i - 1, u = b + steps + 1;
+                        tris.AddRange(new[] { b, u, b + 1, u, u + 1, b + 1 });
+                    }
+                }
             }
             var mesh = new Mesh();
             mesh.SetVertices(verts); mesh.SetColors(cols); mesh.SetTriangles(tris, 0);
@@ -716,6 +728,7 @@ namespace Apocalypse
             foreach (var f in facilityAnims) f(t);
             UpdateBridges();
             UpdateGuard(t);
+            UpdatePlayerShots();
             UpdateDyingZombies(t);
             foreach (var (tr, speed) in spinners)
                 if (tr) tr.localRotation = Quaternion.Euler(0, 0, t * speed);
