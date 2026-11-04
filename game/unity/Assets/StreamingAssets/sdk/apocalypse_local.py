@@ -788,7 +788,7 @@ class Sim:
             before = len(self.zombies)
             self.zombies = [z for z in self.zombies if not self.in_zone(z.pos)]
             self._spawn_fuel()
-            self.log("heli", f"直升機修好了！守軍清掉圈內 {before - len(self.zombies)} 隻殭屍，去撿回 {self.fuel_required} 桶油。現在倒地就無法復活！", self.extraction)
+            self.log("heli", f"直升機修好了！守軍清掉圈內 {before - len(self.zombies)} 隻殭屍，去撿回 {self.fuel_required} 桶油！", self.extraction)
         if self.ready_at >= 0 and self.depart_at < 0 and self.fuel >= self.fuel_required:
             self.depart_at = self.time + c["boardTime"]
             self.log("heli", f"油加滿了！倒數暫停，{c['boardTime']:.0f} 秒後起飛，快回撤離點！", self.extraction)
