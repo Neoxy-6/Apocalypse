@@ -22,54 +22,6 @@ namespace Apocalypse
             }
         }
 
-        readonly Dictionary<int, (int from, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3)> curves = new Dictionary<int, (int, Vector2, Vector2, Vector2, Vector2)>();
-
-        static Vector2 CatmullRom(Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, float t)
-        {
-            float t2 = t * t, t3 = t2 * t;
-            return 0.5f * (2f * p1 + (p2 - p0) * t + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 + (3f * p1 - p0 - 3f * p2 + p3) * t3);
-        }
-
-        Vector2 RoadPoint(int from, int to, float t)
-        {
-            var e = Sim.map.FindEdge(from, to);
-            if (e != null && curves.TryGetValue(e.id, out var c))
-                return from == c.from ? CatmullRom(c.p0, c.p1, c.p2, c.p3, t) : CatmullRom(c.p0, c.p1, c.p2, c.p3, 1f - t);
-            return Vector2.Lerp(Sim.map.nodes[from].pos, Sim.map.nodes[to].pos, t);
-        }
-
-        void BuildHighways(CityMap map)
-        {
-            curves.Clear();
-            const int samples = 12;
-            foreach (var chain in map.highways)
-            {
-                var pts = chain.Select(id => map.nodes[id].pos).ToList();
-                var glow = new List<Vector2>();
-                for (int i = 0; i + 1 < chain.Count; i++)
-                {
-                    var e = map.FindEdge(chain[i], chain[i + 1]);
-                    if (e == null) continue;
-                    Vector2 p1 = pts[i], p2 = pts[i + 1];
-                    Vector2 p0 = i > 0 ? pts[i - 1] : 2f * p1 - p2, p3 = i + 2 < pts.Count ? pts[i + 2] : 2f * p2 - p1;
-                    curves[e.id] = (chain[i], p0, p1, p2, p3);
-                    var lr = roads[e.id];
-                    lr.positionCount = samples + 1;
-                    for (int k = 0; k <= samples; k++)
-                    {
-                        var q = CatmullRom(p0, p1, p2, p3, k / (float)samples);
-                        lr.SetPosition(k, W(q, 0.012f));
-                        if (k > 0 || glow.Count == 0) glow.Add(q);
-                    }
-                }
-                if (glow.Count < 2) continue;
-                var line = NewLine(mapRoot, 0.12f, 3);
-                line.positionCount = glow.Count;
-                for (int i = 0; i < glow.Count; i++) line.SetPosition(i, W(glow[i], 0.014f));
-                line.startColor = line.endColor = new Color(0.85f, 0.9f, 1f);
-            }
-        }
-
         static readonly Dictionary<NodeType, Color> MarkerColors = new Dictionary<NodeType, Color>
         {
             [NodeType.Hospital] = new Color(0.92f, 0.18f, 0.22f), [NodeType.Supply] = new Color(0.2f, 0.75f, 0.35f),

@@ -25,13 +25,12 @@ namespace Apocalypse
             }
         }
 
-        Vector2 StandSpot(int node, int next, Vector2 pos, long key, float progress)
+        Vector2 StandSpot(int node, int next, Vector2 pos, long key)
         {
             var map = Sim.map;
             if (next >= 0 && node >= 0)
             {
-                pos = RoadPoint(node, next, progress);
-                var dir = RoadPoint(node, next, Mathf.Min(1f, progress + 0.05f)) - RoadPoint(node, next, Mathf.Max(0f, progress - 0.05f));
+                var dir = map.nodes[next].pos - map.nodes[node].pos;
                 if (dir.sqrMagnitude > 1e-6f)
                 {
                     dir.Normalize();
@@ -51,11 +50,11 @@ namespace Apocalypse
             foreach (var p in Sim.players)
             {
                 if (p.state == PlayerState.Eliminated) continue;
-                Place(p.id, StandSpot(p.node, p.nextNode, p.pos, p.id, p.progress), p.pos, k);
+                Place(p.id, StandSpot(p.node, p.nextNode, p.pos, p.id), p.pos, k);
             }
 
             zombieSpots.Clear();
-            foreach (var z in Sim.zombies) zombieSpots.Add(StandSpot(z.node, z.nextNode, z.pos, ZombieKey + z.id, z.progress));
+            foreach (var z in Sim.zombies) zombieSpots.Add(StandSpot(z.node, z.nextNode, z.pos, ZombieKey + z.id));
             const float minGap = 0.38f;
             for (int i = 0; i < zombieSpots.Count; i++)
                 for (int j = i + 1; j < zombieSpots.Count; j++)

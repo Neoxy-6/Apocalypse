@@ -31,7 +31,6 @@ namespace Apocalypse
         static readonly Color Bg = new Color(0.035f, 0.045f, 0.08f);
         static readonly Color GridColor = new Color(0.30f, 0.42f, 0.65f, 0.16f);
         static readonly Color RoadColor = new Color(0.24f, 0.33f, 0.48f);
-        static readonly Color HighwayColor = new Color(0.42f, 0.56f, 0.78f), MudColor = new Color(0.45f, 0.32f, 0.18f);
         static readonly Color BridgeColor = new Color(0.50f, 0.62f, 0.80f);
         static readonly Color BlockedColor = new Color(0.85f, 0.18f, 0.18f);
         static readonly Color RiverColor = new Color(0.05f, 0.11f, 0.22f);
@@ -224,12 +223,11 @@ namespace Apocalypse
 
             foreach (var e in map.edges)
             {
-                var lr = NewLine(mapRoot, e.bridge ? 0.7f : e.kind == 1 ? 1.15f : e.kind == 2 ? 0.6f : 0.75f, 2);
+                var lr = NewLine(mapRoot, e.bridge ? 0.7f : 0.75f, 2);
                 lr.SetPosition(0, W(map.nodes[e.a].pos, 0.01f));
                 lr.SetPosition(1, W(map.nodes[e.b].pos, 0.01f));
                 roads[e.id] = lr;
             }
-            BuildHighways(map);
             BuildBridges();
 
             PlaceFacilities();
@@ -455,7 +453,7 @@ namespace Apocalypse
                     kv.Value.material.color = map.nodes[kv.Key].medkits > 0 ? new Color(1.0f, 0.84f, 0.31f) : new Color(0.45f, 0.40f, 0.25f);
             foreach (var e in map.edges)
             {
-                var c = e.blocked ? BlockedColor : e.bridge ? BridgeColor : e.kind == 1 ? HighwayColor : e.kind == 2 ? MudColor : RoadColor;
+                var c = e.blocked ? BlockedColor : e.bridge ? BridgeColor : RoadColor;
                 roads[e.id].startColor = roads[e.id].endColor = c;
             }
 
