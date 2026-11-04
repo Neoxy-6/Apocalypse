@@ -48,7 +48,8 @@ namespace Apocalypse
         public int fuel, fuelRequired;
         int fuelDiscount;
 
-        public bool NoRespawn => cfg.escape && readyAt >= 0;
+        public bool Doomed(Player p) => cfg.escape && !InZone(p.pos);
+        public readonly List<(Vector2 from, Vector2 to, float time)> playerShots = new List<(Vector2, Vector2, float)>();
         public readonly List<Incident> incidents = new List<Incident>();
         int nextIncidentId;
         int lastPhase;
@@ -60,7 +61,7 @@ namespace Apocalypse
             new Dictionary<string, (string, float, int, float, int)>
             {
                 ["outbreak"] = ("感染爆發", 8f, 1, 60f, 60),
-                ["bridge"] = ("橋樑損毀", 10f, 1, 60f, 50),
+                ["bridge"] = ("橋樑損毀", 10f, 1, 9999f, 50),
                 ["airdrop"] = ("物資空投", 4f, 1, 45f, 40),
                 ["trapped"] = ("受困人群", 20f, 2, 75f, 120),
                 ["guard"] = ("撤離點告急", 8f, 1, 50f, 60),
@@ -112,8 +113,9 @@ namespace Apocalypse
         int nextTaskId, nextZombieId, nextPlayerId, nextBatchId;
         float taskTimer, spreadTimer, zombieTimer, eventTimer, restockTimer, botTimer;
 
-        const int StreamTask = 1, StreamEvent = 2, StreamSpread = 3, StreamZombie = 4;
-        int taskSlot, eventIndex, spreadTick, zombieSpawnIndex;
+        const int StreamTask = 1, StreamEvent = 2, StreamSpread = 3, StreamZombie = 4, StreamBlock = 5;
+        int taskSlot, eventIndex, spreadTick, zombieSpawnIndex, roadblockIndex;
+        float roadblockTimer;
 
         void UseStream(int stream, int index)
         {
@@ -154,12 +156,13 @@ namespace Apocalypse
             extraction = map.startNode;
             var drng = new System.Random(unchecked(cfg.seed * 7919 + 17));
             int west = drng.Next(4), east = drng.Next(4);
-            foreach (var n in map.nodes) n.district = n.id % map.cols <= map.riverCol ? west : east;
+            foreach (var n in map.nodes) n.district = map.West(n.id) ? west : east;
+            foreach (var n in map.nodes) if (n.type == NodeType.Armory) n.weapons = cfg.weaponStock;
             var ex = map.nodes[extraction].pos;
             zoneMax = map.nodes.Max(n => Vector2.Distance(n.pos, ex)) + 1f;
-            parts = partsRequired = 0; readyAt = departAt = -1f; guardKills = 0; guardCooldown = 0f; guardShots.Clear();
+            parts = partsRequired = 0; readyAt = departAt = -1f; guardKills = 0; guardCooldown = 0f; guardShots.Clear(); playerShots.Clear();
             incidents.Clear(); evacuated = 0; speedBoostUntil = guardDownUntil = -1f; heliBoost = false;
-            nextIncidentId = 0; incidentTimer = 25f; lastPhase = 0; lastGeneratorBreak = -999f;
+            nextIncidentId = 0; incidentTimer = 25f; roadblockTimer = 40f; roadblockIndex = 0; lastPhase = 0; lastGeneratorBreak = -999f;
             zombieStunUntil = -1f; medevacTimer = 5f; medevacNext = 0f; medevacRolls = 0;
             fuel = fuelRequired = fuelDiscount = 0;
             tasks.Clear(); zombies.Clear(); events.Clear(); batches.Clear(); noises.Clear();
@@ -185,6 +188,7 @@ namespace Apocalypse
             p.lastError = ""; p.lastPlanTime = -999; p.idleSince = -1; p.rank = 0;
             p.noiseTimer = 0; p.lastScream = -999;
             p.downs = 0; p.evacuated = false; p.cityReduced = 0; p.parts = 0; p.escaped = false; p.fixedCount = 0; p.fuel = 0; p.combo = 0; p.lastScoreAt = -999f; p.protectUntil = -1f; p.revivedAt = -999f;
+            p.ammo = 0; p.kills = 0; p.fireCooldown = 0f;
         }
 
         public readonly List<Team> teams = new List<Team>();
@@ -267,7 +271,7 @@ namespace Apocalypse
             UpdateTasks(dt);
             UpdateBatches();
             UpdateZombieSpawns(dt);
-            if (cfg.escape) { CheckMedevac(dt); UpdateGenerators(); SpawnIncidents(dt); } else UpdateEvents(dt);
+            if (cfg.escape) { CheckMedevac(dt); UpdateGenerators(); SpawnIncidents(dt); UpdateRoadblocks(dt); } else UpdateEvents(dt);
             UpdateRestock(dt);
             UpdateBots(dt);
 
@@ -301,6 +305,7 @@ namespace Apocalypse
                     }
                 }
             }
+            UpdateWeapons(dt);
             ApplyDamage(dt);
 
             if (cfg.escape) UpdateHelicopter();
@@ -327,7 +332,7 @@ namespace Apocalypse
                 int before = zombies.Count;
                 zombies.RemoveAll(z => InZone(z.pos));
                 SpawnFuel();
-                Log("heli", $"直升機修好了！守軍清掉圈內 {before - zombies.Count} 隻殭屍，去撿回 {fuelRequired} 桶油。現在倒地就無法復活！", extraction);
+                Log("heli", $"直升機修好了！守軍清掉圈內 {before - zombies.Count} 隻殭屍，去撿回 {fuelRequired} 桶油！", extraction);
             }
             if (readyAt >= 0 && departAt < 0 && fuel >= fuelRequired)
             {
@@ -344,16 +349,20 @@ namespace Apocalypse
             UseStream(StreamEvent, 100000);
             int n = Mathf.Max(1, players.Count);
             fuelRequired = Mathf.Max(2, Mathf.RoundToInt(n * cfg.fuelPerPlayer) - fuelDiscount);
-            var far = map.nodes.Where(nd => nd.type == NodeType.Road && map.dist[extraction, nd.id] >= 6f && map.dist[extraction, nd.id] <= 20f && InZone(nd.pos)).ToList();
-            if (far.Count == 0) far = map.nodes.Where(nd => nd.type == NodeType.Road && map.dist[extraction, nd.id] >= 6f).ToList();
-            if (far.Count == 0) far = map.nodes.Where(nd => nd.type == NodeType.Road).ToList();
+            int Ring(Node nd) { int r = nd.id / map.cols, c = nd.id % map.cols; return Mathf.Min(Mathf.Min(r, map.rows - 1 - r), Mathf.Min(c, map.cols - 1 - c)); }
+            var pool = map.nodes.Where(nd => nd.type == NodeType.Road && map.dist[extraction, nd.id] >= 6f && InZone(nd.pos)).ToList();
+            if (pool.Count == 0) pool = map.nodes.Where(nd => nd.type == NodeType.Road && map.dist[extraction, nd.id] >= 6f).ToList();
+            if (pool.Count == 0) pool = map.nodes.Where(nd => nd.type == NodeType.Road).ToList();
+            int edge = pool.Min(Ring);
+            var far = pool.Where(nd => Ring(nd) <= edge).ToList();
+            if (far.Count < 4) far = pool.Where(nd => Ring(nd) <= edge + 1).ToList();
             int reward = Mathf.RoundToInt(cfg.fuelReward * (1f + 0.25f * Phase));
             for (int i = 0; i < fuelRequired + cfg.fuelSpare + (int)(n * cfg.fuelSparePerPlayer); i++)
             {
                 int node = far[rng.Next(far.Count)].id;
                 tasks.Add(new GameTask
                 {
-                    id = nextTaskId++, type = TaskType.Fuel, origin = node, dest = extraction, weight = 2, reward = reward,
+                    id = nextTaskId++, type = TaskType.Fuel, origin = node, dest = extraction, weight = cfg.fuelWeight, reward = reward,
                     availableAt = time, expiresAt = -1f, status = TaskStatus.Open,
                 });
             }
@@ -378,6 +387,26 @@ namespace Apocalypse
 
         public Incident IncidentById(int id) => incidents.FirstOrDefault(i => i.id == id);
 
+        void UpdateRoadblocks(float dt)
+        {
+            roadblockTimer -= dt;
+            if (roadblockTimer > 0) return;
+            roadblockTimer = cfg.roadblockInterval / (1f + 0.15f * Phase);
+            UseStream(StreamBlock, roadblockIndex++);
+            var open = map.edges.Where(e => !e.blocked && !e.bridge).ToList();
+            var busy = open.Where(e => e.kind == 1).ToList();
+            for (int tries = 0; tries < 5; tries++)
+            {
+                var e = busy.Count > 0 && rng.NextDouble() < 0.5 ? busy[rng.Next(busy.Count)] : open[rng.Next(open.Count)];
+                e.blocked = true;
+                map.Recompute();
+                if (!map.Connected()) { e.blocked = false; map.Recompute(); continue; }
+                e.blockedUntil = time + cfg.roadblockTime * (0.75f + 0.5f * (float)rng.NextDouble());
+                Log("roadblock", $"屍潮堵住了路口 {e.a} 和 {e.b} 之間的路，{e.blockedUntil - time:0} 秒後才散開", e.a);
+                return;
+            }
+        }
+
         void SpawnIncidents(float dt)
         {
             incidentTimer -= dt;
@@ -385,7 +414,7 @@ namespace Apocalypse
             int n = Mathf.Max(1, players.Count);
             incidentTimer = cfg.incidentInterval * DScale / (1f + 0.2f * Phase) / Mathf.Max(1f, Mathf.Sqrt(n / 6f));
             UseStream(StreamEvent, eventIndex++);
-            if (incidents.Count(i => i.status == "active" && i.kind != "generator") >= 1 + n / 4) return;
+            if (incidents.Count(i => i.status == "active" && i.kind != "generator" && i.kind != "bridge") >= 1 + n / 4) return;
             int ph = Phase;
             var kinds = new List<(string, float)> { ("outbreak", 0.3f), ("airdrop", 0.25f), ("trapped", 0.2f), ("bridge", 0.15f), ("chest", 0.15f) };
             if (ph >= 1) kinds.AddRange(new[] { ("guard", 0.15f), ("napalm", 0.15f), ("decoy", 0.12f) });
@@ -431,7 +460,7 @@ namespace Apocalypse
             {
                 var open = map.edges.Where(e => !e.blocked).ToList();
                 var brs = open.Where(e => e.bridge).ToList();
-                if (brs.Count == 0) brs = open;
+                if (brs.Count == 0) return;
                 edge = brs[rng.Next(brs.Count)];
                 edge.blocked = true;
                 map.Recompute();
@@ -459,7 +488,7 @@ namespace Apocalypse
 
         public IEnumerable<Node> Generators => map.nodes.Where(n => n.type == NodeType.Generator);
 
-        bool West(int node) => node % map.cols <= map.riverCol;
+        bool West(int node) => map.West(node);
 
         IEnumerable<Node> GeneratorsFor(Node factory)
         {
@@ -868,7 +897,7 @@ namespace Apocalypse
             tasks.RemoveAll(t => (t.status == TaskStatus.Done || t.status == TaskStatus.Expired) && time - t.expiresAt > 30f && t.carrier < 0);
 
             taskTimer -= dt;
-            if (taskTimer > 0 || NoRespawn) return;
+            if (taskTimer > 0 || (cfg.escape && readyAt >= 0)) return;
             taskTimer = cfg.taskInterval / (map.Scale * SquadTaskScale * (1f + 0.35f * Phase));
             UseStream(StreamTask, taskSlot++);
             SpawnTask(rng.NextDouble() < 0.15 + 0.07 * Phase, cfg.announceLead);
@@ -1018,13 +1047,13 @@ namespace Apocalypse
 
         static string Clock(float t) => $"{(int)t / 60:00}:{(int)t % 60:00}";
 
-        int MaxZombies => Mathf.RoundToInt((3 + 21f * time / cfg.matchDuration) * map.Scale);
+        int MaxZombies => Mathf.RoundToInt((cfg.zombieCapBase + cfg.zombieCapGrowth * time / cfg.matchDuration) * map.Scale);
 
         void UpdateZombieSpawns(float dt)
         {
             zombieTimer -= dt;
             if (zombieTimer > 0) return;
-            zombieTimer = (6f - Phase) / map.Scale;
+            zombieTimer = (6f - Phase) / map.Scale / cfg.zombieSpawnMul;
             UseStream(StreamZombie, zombieSpawnIndex++);
             if (zombies.Count(z => z.fromPlayer < 0) < MaxZombies) SpawnZombieAtInfected();
         }
@@ -1091,6 +1120,7 @@ namespace Apocalypse
             restockTimer = 45f;
             foreach (var n in map.nodes)
                 if (n.type == NodeType.Supply && n.medkits < 5) n.medkits++;
+                else if (n.type == NodeType.Armory && n.weapons < cfg.weaponStock) n.weapons++;
         }
 
         void UpdateBots(float dt)
@@ -1115,7 +1145,7 @@ namespace Apocalypse
             }
         }
 
-        public int Load(Player p) => p.cargo.Sum(id => TaskById(id)?.weight ?? 0) + p.medkits;
+        public int Load(Player p) => p.cargo.Sum(id => TaskById(id)?.weight ?? 0) + p.medkits + (p.ammo > 0 ? cfg.weaponWeight : 0);
 
         public float Speed(Player p)
         {
@@ -1129,7 +1159,7 @@ namespace Apocalypse
         public Player PlayerById(int id) => players.FirstOrDefault(p => p.id == id);
 
         static readonly HashSet<string> Actions = new HashSet<string>
-            { "move", "goto", "pickup", "dropoff", "take_medkit", "use_medkit", "heal", "revive", "wait", "fix" };
+            { "move", "goto", "pickup", "dropoff", "take_medkit", "use_medkit", "heal", "revive", "wait", "fix", "take_weapon", "drop", "drop_medkit", "drop_weapon" };
 
         public string SubmitPlan(Player p, List<PlanStep> steps, bool append, int startNode = -1)
         {
@@ -1162,12 +1192,12 @@ namespace Apocalypse
             return null;
         }
 
-        static readonly HashSet<string> EmergencyActions = new HashSet<string> { "move", "goto", "wait", "use_medkit", "heal" };
+        static readonly HashSet<string> EmergencyActions = new HashSet<string> { "move", "goto", "wait", "use_medkit", "heal", "drop", "drop_medkit", "drop_weapon" };
 
         bool IsEmergencyPlan(List<PlanStep> steps)
         {
             if (steps.Count == 0 || !steps.All(s => EmergencyActions.Contains(s.action))) return false;
-            if (steps.Any(s => s.action == "use_medkit" || s.action == "heal")) return true;
+            if (steps.Any(s => s.action == "use_medkit" || s.action == "heal" || IsDrop(s.action))) return true;
             var last = steps.LastOrDefault(s => s.action == "move" || s.action == "goto");
             return last != null && last.node >= 0 && last.node < map.nodes.Count && map.nodes[last.node].Safe;
         }
@@ -1180,12 +1210,13 @@ namespace Apocalypse
                 p.downedTimer -= dt;
                 if (p.downedTimer <= 0)
                 {
-                    if (NoRespawn) Eliminate(p, p.eliminatedReason == "" ? "沒人來救" : p.eliminatedReason);
+                    if (Doomed(p)) Eliminate(p, p.eliminatedReason == "" ? "沒人來救" : p.eliminatedReason);
                     else Respawn(p);
                 }
                 return;
             }
 
+            DropNow(p);
             if (p.nextNode >= 0)
             {
                 if (Advance(ref p.node, ref p.nextNode, ref p.progress, Speed(p), dt)) p.pos = map.nodes[p.node].pos;
@@ -1245,7 +1276,7 @@ namespace Apocalypse
                 }
                 default:
                 {
-
+                    if (IsDrop(s.action)) { DoDrop(p, s); p.planIndex++; return; }
                     var done = s.task >= 0 ? TaskById(s.task) : null;
                     if ((s.action == "pickup" && p.cargo.Contains(s.task)) ||
                         (s.action == "dropoff" && done != null && done.completedBy == p.id))
@@ -1264,6 +1295,54 @@ namespace Apocalypse
                     p.planIndex++;
                     return;
                 }
+            }
+        }
+
+        static bool IsDrop(string action) => action == "drop" || action == "drop_medkit" || action == "drop_weapon";
+
+        void DropNow(Player p)
+        {
+            while (p.planIndex < p.plan.Count && IsDrop(p.plan[p.planIndex].action))
+            {
+                DoDrop(p, p.plan[p.planIndex]);
+                p.planIndex++;
+            }
+        }
+
+        void DoDrop(Player p, PlanStep s)
+        {
+            int at = p.nextNode >= 0 && p.progress > 0.5f ? p.nextNode : p.node;
+            if (s.action == "drop_medkit") { if (p.medkits > 0) p.medkits--; else p.lastError = $"[{time:0}s] drop_medkit：沒有醫療包（已略過此步）"; return; }
+            if (s.action == "drop_weapon") { if (p.ammo > 0) p.ammo = 0; else p.lastError = $"[{time:0}s] drop_weapon：沒有武器（已略過此步）"; return; }
+            var t = TaskById(s.task);
+            if (t == null || !p.cargo.Contains(s.task)) { p.lastError = $"[{time:0}s] drop：你沒有攜帶委託 #{s.task}（已略過此步）"; return; }
+            p.cargo.Remove(t.id);
+            t.status = TaskStatus.Open; t.carrier = -1; t.origin = at;
+            t.expiresAt = t.type == TaskType.Fuel ? -1f : time + 60f;
+            for (int k = p.plan.Count - 1; k > p.planIndex; k--)
+                if (p.plan[k].action == "dropoff" && p.plan[k].task == t.id) p.plan.RemoveAt(k);
+        }
+
+        void UpdateWeapons(float dt)
+        {
+            foreach (var p in players)
+            {
+                if (p.state != PlayerState.Active || p.ammo <= 0) continue;
+                p.fireCooldown -= dt;
+                if (p.fireCooldown > 0) continue;
+                Zombie best = null;
+                float bd = cfg.weaponRange;
+                foreach (var z in zombies)
+                {
+                    float d = Vector2.Distance(z.pos, p.pos);
+                    if (d <= bd) { best = z; bd = d; }
+                }
+                if (best == null) continue;
+                zombies.Remove(best);
+                p.ammo--; p.kills++; p.score += cfg.killReward;
+                p.fireCooldown = cfg.weaponInterval;
+                playerShots.Add((p.pos, best.pos, time));
+                if (playerShots.Count > 30) playerShots.RemoveAt(0);
             }
         }
 
@@ -1305,6 +1384,12 @@ namespace Apocalypse
                     if (node.type != NodeType.Supply) return "take_medkit：這裡不是補給站";
                     if (node.medkits <= 0) return "take_medkit：補給站已無醫療包";
                     if (Load(p) + 1 > cfg.capacity) return "take_medkit：背包容量不足";
+                    return null;
+                case "take_weapon":
+                    if (node.type != NodeType.Armory) return "take_weapon：這裡不是軍火庫";
+                    if (node.weapons <= 0) return "take_weapon：軍火庫沒有武器了";
+                    if (p.ammo > 0) return "take_weapon：你已經有武器了";
+                    if (Load(p) + cfg.weaponWeight > cfg.capacity) return "take_weapon：背包容量不足";
                     return null;
                 case "use_medkit":
                     return p.medkits > 0 ? null : "use_medkit：沒有醫療包";
@@ -1356,12 +1441,14 @@ namespace Apocalypse
                     p.cargo.Remove(t.id);
                     if (!(cfg.escape && p.node == extraction))
                         MakeNoise(p.node, cfg.actionNoiseRadius, cfg.actionNoiseDuration, "dropoff");
+                    bool useless = cfg.escape && ((t.type == TaskType.Part && readyAt >= 0) || (t.type == TaskType.Fuel && fuel >= fuelRequired));
                     int gain = t.reward;
-                    bool onTime = t.urgent && time <= t.deadline;
+                    bool onTime = !useless && t.urgent && time <= t.deadline;
                     if (onTime) gain += t.bonus;
                     if (cfg.escape && t.type == TaskType.Part && cfg.partDecay > 0)
                         gain = Mathf.RoundToInt(gain * cfg.partDecay / (cfg.partDecay + p.parts));
-                    if (cfg.escape) gain = ComboGain(p, gain);
+                    if (useless) gain = 0;
+                    else if (cfg.escape) gain = ComboGain(p, gain);
                     p.score += gain;
                     t.status = TaskStatus.Done; t.carrier = -1; t.completedBy = p.id; t.expiresAt = time;
                     if (cfg.coop && !cfg.escape) ReduceCity(p, gain);
@@ -1369,7 +1456,7 @@ namespace Apocalypse
                     else if (t.type == TaskType.Fuel) { fuel++; p.fuel++; }
                     if (t.type == TaskType.Rescue) { p.rescued++; evacuated++; if (!cfg.coop) cityInfection = Mathf.Max(0, cityInfection - 1.5f); }
                     else if (t.type != TaskType.Part && t.type != TaskType.Fuel) p.delivered++;
-                    Log("done", $"{p.name} 完成{(t.type == TaskType.Rescue ? "救援" : t.type == TaskType.Part ? "零件" : t.type == TaskType.Fuel ? "油桶" : "配送")} #{t.id} +{gain}{(onTime ? "（限時獎勵）" : "")}{(cfg.escape && p.combo > 0 ? $"（連續得分 {p.combo + 1} 次）" : "")}");
+                    Log("done", $"{p.name} 完成{(t.type == TaskType.Rescue ? "救援" : t.type == TaskType.Part ? "零件" : t.type == TaskType.Fuel ? "油桶" : "配送")} #{t.id} +{gain}{(useless ? "（已經不需要了）" : "")}{(onTime ? "（限時獎勵）" : "")}{(cfg.escape && p.combo > 0 ? $"（連續得分 {p.combo + 1} 次）" : "")}");
                     var b = BatchOf(t);
                     if (b != null && cfg.coop)
                     {
@@ -1400,6 +1487,9 @@ namespace Apocalypse
                 }
                 case "take_medkit":
                     map.nodes[p.node].medkits--; p.medkits++;
+                    break;
+                case "take_weapon":
+                    map.nodes[p.node].weapons--; p.ammo = cfg.weaponShots; p.fireCooldown = 0f;
                     break;
                 case "use_medkit":
                     p.medkits--;
@@ -1460,13 +1550,14 @@ namespace Apocalypse
                 t.expiresAt = t.type == TaskType.Fuel ? -1f : time + 60f;
             }
             p.cargo.Clear();
+            p.ammo = 0;
             p.downs++;
             int penalty = cfg.respawnPenalty * (cfg.escape ? Mathf.Min(p.downs, 3) : 1);
             p.score -= penalty;
             p.combo = 0; p.lastScoreAt = -999f;
             cityInfection += 1f;
             p.eliminatedReason = reason;
-            if (NoRespawn) Log("down", $"{p.name} 倒地了！{cfg.downedTime:0} 秒內沒人來救就逃不掉了", p.node);
+            if (Doomed(p)) Log("down", $"{p.name} 在安全區外倒地了！{cfg.downedTime:0} 秒內沒人來救就逃不掉了", p.node);
             else Log("down", $"{p.name} 倒地（{reason}），掉落貨物、扣 {penalty} 分，{cfg.downedTime:0} 秒內有人來救 +{cfg.reviveBonus}，不然回撤離點復活", p.node);
         }
 
@@ -1511,7 +1602,7 @@ namespace Apocalypse
         {
             if (z.nextNode >= 0)
             {
-                if (Advance(ref z.node, ref z.nextNode, ref z.progress, ZombieSpeed, dt)) z.pos = map.nodes[z.node].pos;
+                if (Advance(ref z.node, ref z.nextNode, ref z.progress, ZombieSpeed * (z.mode == ZombieMode.Chase ? cfg.zombieChaseMul : 1f), dt)) z.pos = map.nodes[z.node].pos;
                 else z.pos = Vector2.Lerp(map.nodes[z.node].pos, map.nodes[z.nextNode].pos, z.progress);
                 return;
             }
@@ -1520,7 +1611,7 @@ namespace Apocalypse
             DecideZombie(z);
             if (z.target >= 0 && z.target != z.node)
             {
-                int hop = map.next[z.node, z.target];
+                int hop = map.znext[z.node, z.target];
                 if (hop >= 0) { z.nextNode = hop; z.progress = 0; }
                 else z.target = -1;
             }
@@ -1543,7 +1634,7 @@ namespace Apocalypse
             if (z.mode != ZombieMode.Wander || z.target < 0 || z.target == z.node)
             {
                 z.mode = ZombieMode.Wander;
-                var near = map.nodes.Where(n => !n.Safe && map.dist[z.node, n.id] >= 6f && map.dist[z.node, n.id] <= 18f).ToList();
+                var near = map.nodes.Where(n => !n.Safe && map.zdist[z.node, n.id] >= 6f && map.zdist[z.node, n.id] <= 18f).ToList();
                 if (near.Count == 0) near = map.nodes.Where(n => !n.Safe && n.id != z.node).ToList();
                 z.target = near.Count > 0 ? near[z.rng.Next(near.Count)].id : -1;
             }
@@ -1556,7 +1647,7 @@ namespace Apocalypse
             if (z.nextNode >= 0) { path.Add(z.nextNode); from = z.nextNode; }
             if (z.target >= 0 && z.target != from)
             {
-                var rest = map.Path(from, z.target);
+                var rest = map.ZPath(from, z.target);
                 if (rest != null) path.AddRange(rest);
             }
             if (path.Count > maxLen) path.RemoveRange(maxLen, path.Count - maxLen);

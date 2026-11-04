@@ -12,20 +12,20 @@ PHASE_ENDS = [0.25, 0.5833, 0.8333, 1.0]
 PALETTE = ["#4DC2F7", "#FF7042", "#BA68C7", "#FFD64F", "#66BA6B", "#F06191", "#4FD1C4", "#FA9E21", "#9EA8FF", "#CCDB38"]
 
 DEFAULTS = dict(
-    mapCols=10, mapRows=8, bridges=4,
+    mapCols=10, mapRows=8, bridges=2,
     batchChance=0.6, batchMin=3, batchMax=5, batchBonusRatio=1.0, taskInterval=9.0, announceLead=30.0,
     seed=42, matchDuration=600.0, randomBots=0, greedyBots=0, botReactionTime=1.0,
-    planCooldown=15.0, maxPlanSteps=200, capacity=10, playerSpeed=3.0, loadSpeedPenalty=0.02,
+    planCooldown=15.0, maxPlanSteps=200, capacity=10, playerSpeed=3.0, loadSpeedPenalty=0.05, fuelWeight=4, weaponWeight=4, weaponShots=8, weaponStock=2, killReward=5, weaponRange=3.5, weaponInterval=1.2,
     downedTime=15.0, survivalBonus=120, reviveBonus=60, respawnPenalty=50, respawnHp=70.0,
     cityRate=0.55, spreadAmount=0.15, spreadGrow=0.02,
 
     coop=True, coopCityRate=1.35, cityPerPlayer=0.02, cityPerPoint=0.03, classBonus=200, urgentFailCity=3.0, rescueFailCity=2.0,
     coopTaskPlayers=3.0,
 
-    escape=True, partsBase=0.0, partsPerPlayer=23.0, partsCrowding=0.3, difficulty=1.2, earliestDepart=480.0, departDelay=60.0, escapeBonus=200, earlyBonusPerSec=1.0,
+    escape=True, partsBase=0.0, partsPerPlayer=9.2, partsCrowding=0.15, difficulty=1.2, earliestDepart=480.0, departDelay=60.0, escapeBonus=200, earlyBonusPerSec=1.0,
     zoneStart=90.0, zoneEnd=540.0, zoneMinRadius=7.0, zoneDamage=3.0, zoneInfection=1.0,
 
-    incidentInterval=30.0, civilianZombies=1, civiliansPerPlayer=2.5, trappedCivilians=4, generatorWeight=0.12, generatorCooldown=90.0, speedBoost=1.2, speedBoostTime=60.0, guardDownTime=60.0,
+    incidentInterval=30.0, roadblockInterval=45.0, roadblockTime=60.0, civilianZombies=1, civiliansPerPlayer=2.5, trappedCivilians=4, generatorWeight=0.12, generatorCooldown=90.0, speedBoost=1.2, speedBoostTime=60.0, guardDownTime=60.0,
     guardRange=5.0, guardFireInterval=1.0,
 
     fuelPerPlayer=0.6, fuelSpare=4, fuelSparePerPlayer=0.3, fuelReward=80, boardTime=45.0,
@@ -36,8 +36,8 @@ DEFAULTS = dict(
 
     partDecay=80.0,
     comboWindow=25.0, comboStep=10, comboMax=5,
-    zombieSpeed=1.3, zombieSpeedPerPhase=0.2, zombieSight=5.5, zombieAttackRange=0.9,
-    zombieDamage=3.5, zombieInfection=2.0,
+    zombieSpeed=1.4, zombieSpeedPerPhase=0.2, zombieSight=5.5, zombieAttackRange=0.9,
+    zombieDamage=5.5, zombieInfection=2.5, zombieChaseMul=1.25, zombieCapBase=6.0, zombieCapGrowth=40.0, zombieSpawnMul=1.6,
     actionNoiseRadius=10.0, actionNoiseDuration=12.0, survivorNoiseRadius=8.0, screamRadius=12.0,
 )
 
@@ -108,10 +108,11 @@ def _round(x):
     return int(round(x))
 
 class Node:
-    __slots__ = ("id", "type", "pos", "infection", "medkits", "edges", "district", "powered")
+    __slots__ = ("id", "type", "pos", "infection", "medkits", "edges", "district", "powered", "weapons")
 
     def __init__(self, id, pos):
         self.id, self.type, self.pos, self.infection, self.medkits, self.edges = id, "road", pos, 0.0, 0, []
+        self.weapons = 0
         self.powered = False
         self.district = "city"
 
@@ -120,14 +121,20 @@ class Node:
         return self.type in ("shelter", "hospital")
 
 class Edge:
-    __slots__ = ("id", "a", "b", "length", "bridge", "blocked", "blocked_until")
+    __slots__ = ("id", "a", "b", "length", "bridge", "blocked", "blocked_until", "kind")
 
     def __init__(self, id, a, b, length, bridge):
         self.id, self.a, self.b, self.length, self.bridge = id, a, b, length, bridge
-        self.blocked, self.blocked_until = False, 0.0
+        self.blocked, self.blocked_until, self.kind = False, 0.0, 0
 
     def other(self, n):
         return self.b if n == self.a else self.a
+
+HIGHWAY_MUL = np.float32(1.6)
+DIAG_DIV, REMOVE_DIV, KEEP_DEG = 14, 1, 2
+
+def _sign(x):
+    return (x > 0) - (x < 0)
 
 class CityMap:
     spacing = 6.0
@@ -135,7 +142,14 @@ class CityMap:
     def __init__(self, cols, rows, bridges):
         self.cols, self.rows = max(4, cols), max(3, rows)
         self.bridge_count = min(max(bridges, 1), self.rows)
-        self.river_col = self.cols // 2 - 1
+        self.river: list[tuple[int, int]] = []
+        self.river_set: set = set()
+        self.cuts: set = set()
+        self.side_a: list[bool] = []
+        self.highways: list[list[int]] = []
+        self.warp_x: list = []
+        self.warp_y: list = []
+        self.warp_w = self.warp_h = 0
         self.nodes: list[Node] = []
         self.edges: list[Edge] = []
         self.start_node = 0
@@ -144,45 +158,209 @@ class CityMap:
     def scale(self):
         return len(self.nodes) / 48.0
 
+    def west(self, node):
+        return self.side_a[node]
+
+    def warp(self, gx, gy):
+        f = np.float32
+        u, v = f(gx) / f(3), f(gy) / f(3)
+        i = min(max(int(math.floor(u)), 0), self.warp_w - 2)
+        j = min(max(int(math.floor(v)), 0), self.warp_h - 2)
+        fu, fv = u - f(i), v - f(j)
+        W = self.warp_w
+
+        def lerp2(w):
+            a = w[j * W + i] + (w[j * W + i + 1] - w[j * W + i]) * fu
+            b = w[(j + 1) * W + i] + (w[(j + 1) * W + i + 1] - w[(j + 1) * W + i]) * fu
+            return a + (b - a) * fv
+        return lerp2(self.warp_x), lerp2(self.warp_y)
+
+    @staticmethod
+    def _arc(n, lo, hi, rng):
+        a, b = lo + rng.next(hi - lo + 1), lo + rng.next(hi - lo + 1)
+        sign, amp = rng.next(2) * 2 - 1, 1 + rng.next(2)
+        line = []
+        for i in range(n):
+            v = (a * (n - 1 - i) + b * i) // (n - 1) + sign * (amp * 4 * i * (n - 1 - i) // ((n - 1) * (n - 1)))
+            v = min(max(v, lo), hi)
+            if i > 0:
+                v = min(max(v, line[i - 1] - 1), line[i - 1] + 1)
+            line.append(v)
+        return line
+
+    def _build_highway(self, rng, horizontal):
+        cols, rows = self.cols, self.rows
+        n = cols if horizontal else rows
+        line = self._arc(n, 1, (rows if horizontal else cols) - 2, rng)
+
+        def at(i):
+            return line[i] * cols + i if horizontal else i * cols + line[i]
+        run = [at(0)]
+        for i in range(n - 1):
+            a, b = at(i), at(i + 1)
+            straight = line[i] == line[i + 1]
+            r = min(line[i], line[i + 1]) if horizontal else i
+            c = i if horizontal else min(line[i], line[i + 1])
+            ok = not self._cut(a, b) if straight else not self.river_in_cell(r, c)
+            if not ok:
+                if len(run) > 1:
+                    self.highways.append(run)
+                run = [b]
+                continue
+            e = self.find_edge(a, b) or self._add(a, b, False)
+            if e.kind == 0:
+                e.kind = 1
+                e.length = _f32(np.float32(e.length) / HIGHWAY_MUL)
+            run.append(b)
+        if len(run) > 1:
+            self.highways.append(run)
+
+    def river_in_cell(self, r, c):
+        return (c + 1, r + 1) in self.river_set
+
+    @staticmethod
+    def _key(a, b):
+        return min(a, b) * 10000 + max(a, b)
+
+    def _cut(self, a, b):
+        return self._key(a, b) in self.cuts
+
     def find_edge(self, a, b):
         for e in self.nodes[a].edges:
             if self.edges[e].other(a) == b:
                 return self.edges[e]
         return None
 
+    def _entry(self, side, rng):
+        cols, rows = self.cols, self.rows
+        if side == 0:
+            return (2 + rng.next(cols - 3), 0)
+        if side == 1:
+            return (cols, 2 + rng.next(rows - 3))
+        if side == 2:
+            return (2 + rng.next(cols - 3), rows)
+        return (0, 2 + rng.next(rows - 3))
+
+    def _inward(self, p):
+        return (min(max(p[0], 1), self.cols - 1), min(max(p[1], 1), self.rows - 1))
+
+    @staticmethod
+    def _stair(path, to, rng):
+        p = path[-1]
+        while p != to:
+            dx, dy = _sign(to[0] - p[0]), _sign(to[1] - p[1])
+            if dx != 0 and dy != 0:
+                if rng.next(2) == 0:
+                    dy = 0
+                else:
+                    dx = 0
+            p = (p[0] + dx, p[1] + dy)
+            path.append(p)
+
+    def _step_edge(self, p, q):
+        cols = self.cols
+        if p[1] == q[1]:
+            x = min(p[0], q[0])
+            return self._key((p[1] - 1) * cols + x, p[1] * cols + x)
+        y = min(p[1], q[1])
+        return self._key(y * cols + p[0] - 1, y * cols + p[0])
+
+    def _split(self, path):
+        cols, rows = self.cols, self.rows
+        self.cuts = {self._step_edge(path[i], path[i + 1]) for i in range(len(path) - 1)}
+        side = [False] * (rows * cols)
+        side[0] = True
+        queue = [0]
+        while queue:
+            u = queue.pop(0)
+            r, c = u // cols, u % cols
+            for v in (u - 1 if c > 0 else -1, u + 1 if c + 1 < cols else -1, u - cols if r > 0 else -1, u + cols if r + 1 < rows else -1):
+                if v >= 0 and not side[v] and not self._cut(u, v):
+                    side[v] = True
+                    queue.append(v)
+        self.side_a = side
+
+    def _generate_river(self, rng):
+        cols, rows = self.cols, self.rows
+        n, best_gap = rows * cols, None
+        best = [(cols // 2, y) for y in range(rows + 1)]
+        for _ in range(80):
+            s0 = rng.next(4)
+            s1 = (s0 + 1 + rng.next(3)) % 4
+            a = self._entry(s0, rng)
+            b = self._entry(s1, rng)
+            mid = (2 + rng.next(cols - 3), 2 + rng.next(rows - 3))
+            path = [a, self._inward(a)]
+            self._stair(path, mid, rng)
+            self._stair(path, self._inward(b), rng)
+            path.append(b)
+            if len(set(path)) != len(path):
+                continue
+            self._split(path)
+            gap = abs(sum(self.side_a) * 2 - n)
+            if best_gap is None or gap < best_gap:
+                best_gap, best = gap, path
+            if gap * 10 <= n:
+                break
+        self._split(best)
+        self.river = best
+        self.river_set = set(best)
+
     def generate(self, rng):
         cols, rows = self.cols, self.rows
+        f = np.float32
+        self.warp_w, self.warp_h = cols // 3 + 2, rows // 3 + 2
+        self.warp_x, self.warp_y = [], []
+        for _ in range(self.warp_w * self.warp_h):
+            self.warp_x.append(f(rng.next_double() - 0.5) * f(5))
+            self.warp_y.append(f(rng.next_double() - 0.5) * f(5))
+        sx, sy = f((cols - 1) * self.spacing), f((rows - 1) * self.spacing)
         for r in range(rows):
             for c in range(cols):
-                jx = _f32(np.float32(rng.next_double() - 0.5) * np.float32(1.6))
-                jy = _f32(np.float32(rng.next_double() - 0.5) * np.float32(1.6))
-                self.nodes.append(Node(r * cols + c, (_f32(c * self.spacing + jx), _f32(r * self.spacing + jy))))
-        bridge_rows = _order_by_random(list(range(rows)), rng)[:self.bridge_count]
+                jx = f(rng.next_double() - 0.5) * f(2.2)
+                jy = f(rng.next_double() - 0.5) * f(2.2)
+                wx, wy = self.warp(c, r)
+                x = min(max(f(c * self.spacing) + jx + wx, f(-2.5)), sx + f(2.5))
+                y = min(max(f(r * self.spacing) + jy + wy, f(-2.5)), sy + f(2.5))
+                self.nodes.append(Node(r * cols + c, (_f32(x), _f32(y))))
+        self._generate_river(rng)
+        steps = [self._step_edge(self.river[i], self.river[i + 1]) for i in range(len(self.river) - 1)]
+        third = max(1, len(steps) // 3)
+        bridge_keys = {steps[rng.next(third)]}
+        bridge_keys.add(steps[len(steps) - 1 - rng.next(third)])
+        if self.bridge_count > 2:
+            for k in _order_by_random([k for k in steps if k not in bridge_keys], rng)[:self.bridge_count - 2]:
+                bridge_keys.add(k)
         for r in range(rows):
             for c in range(cols):
                 i = r * cols + c
                 if c + 1 < cols:
-                    if c != self.river_col:
+                    if not self._cut(i, i + 1):
                         self._add(i, i + 1, False)
-                    elif r in bridge_rows:
+                    elif self._key(i, i + 1) in bridge_keys:
                         self._add(i, i + 1, True)
                 if r + 1 < rows:
-                    self._add(i, i + cols, False)
-        for _ in range(cols * rows // 7):
+                    if not self._cut(i, i + cols):
+                        self._add(i, i + cols, False)
+                    elif self._key(i, i + cols) in bridge_keys:
+                        self._add(i, i + cols, True)
+        for _ in range(cols * rows // DIAG_DIV):
             c, r = rng.next(cols - 1), rng.next(rows - 1)
-            if c == self.river_col:
+            down = rng.next(2) == 0
+            if self.river_in_cell(r, c):
                 continue
-            if rng.next(2) == 0:
+            if down:
                 self._add(r * cols + c, (r + 1) * cols + c + 1, False)
             else:
                 self._add(r * cols + c + 1, (r + 1) * cols + c, False)
-        cands = _order_by_random([e for e in self.edges if not e.bridge], rng)[:len(self.edges) // 8]
+        self._build_highway(rng, True)
+        self._build_highway(rng, False)
+        cands = _order_by_random([e for e in self.edges if not e.bridge and e.kind == 0], rng)[:len(self.edges) // REMOVE_DIV]
         for e in cands:
-            if len(self.nodes[e.a].edges) <= 2 or len(self.nodes[e.b].edges) <= 2:
+            if len(self.nodes[e.a].edges) <= KEEP_DEG or len(self.nodes[e.b].edges) <= KEEP_DEG:
                 continue
             e.blocked = True
-            self.recompute()
-            if not self.connected():
+            if not self._reachable():
                 e.blocked = False
                 continue
             self._remove(e)
@@ -190,12 +368,14 @@ class CityMap:
         self.recompute()
 
     def _add(self, a, b, bridge):
-        if self.find_edge(a, b):
-            return
+        old = self.find_edge(a, b)
+        if old:
+            return old
         e = Edge(len(self.edges), a, b, _dist(self.nodes[a].pos, self.nodes[b].pos), bridge)
         self.edges.append(e)
         self.nodes[a].edges.append(e.id)
         self.nodes[b].edges.append(e.id)
+        return e
 
     def _remove(self, e):
         self.edges.remove(e)
@@ -215,8 +395,8 @@ class CityMap:
 
         def free(n):
             return n.type == "road" and n.infection == 0
-        left = _order_by_random([n for n in self.nodes if free(n) and n.id % cols <= self.river_col], rng)
-        right = _order_by_random([n for n in self.nodes if free(n) and n.id % cols > self.river_col], rng)
+        left = _order_by_random([n for n in self.nodes if free(n) and self.west(n.id)], rng)
+        right = _order_by_random([n for n in self.nodes if free(n) and not self.west(n.id)], rng)
 
         def take(pool, t, count):
             for _ in range(count):
@@ -226,6 +406,7 @@ class CityMap:
         extra = max(0, _round((rows * cols / 48.0 - 1.0) * 2.0))
         take(left, "shelter", 2 + extra // 2); take(left, "hospital", 1); take(left, "supply", 2); take(left, "factory", 1 + (extra + 1) // 2); take(left, "generator", 1)
         take(right, "shelter", 1 + extra // 2); take(right, "hospital", 1); take(right, "supply", 1 + extra // 2); take(right, "factory", 2 + (extra + 1) // 2); take(right, "generator", 1)
+        take(left if rng.next(2) == 0 else right, "armory", 1)
         for n in self.nodes:
             if n.type == "supply":
                 n.medkits = 3
@@ -233,17 +414,38 @@ class CityMap:
         shelters = [n for n in self.nodes if n.type == "shelter"]
         self.start_node = min(shelters, key=lambda n: _dist(n.pos, (cx, cy))).id
 
+    def _reachable(self):
+        seen = [False] * len(self.nodes)
+        seen[0] = True
+        queue, count = [0], 1
+        while queue:
+            u = queue.pop()
+            for i in self.nodes[u].edges:
+                e = self.edges[i]
+                if e.blocked:
+                    continue
+                v = e.other(u)
+                if not seen[v]:
+                    seen[v] = True
+                    count += 1
+                    queue.append(v)
+        return count == len(self.nodes)
+
     def connected(self):
         return bool(np.all(self.dist[0] < INF))
 
     def recompute(self):
+        self.dist, self.next = self._floyd(False)
+        self.zdist, self.znext = self.dist, self.next
+
+    def _floyd(self, zombie):
         n = len(self.nodes)
         d = np.full((n, n), np.float32(INF), dtype=np.float32)
         nx = np.full((n, n), -1, dtype=np.int64)
         np.fill_diagonal(d, 0)
         nx[np.arange(n), np.arange(n)] = np.arange(n)
         for e in self.edges:
-            if e.blocked:
+            if e.blocked or (zombie and e.kind == 2):
                 continue
             d[e.a, e.b] = d[e.b, e.a] = e.length
             nx[e.a, e.b], nx[e.b, e.a] = e.b, e.a
@@ -253,16 +455,20 @@ class CityMap:
             better = (alt < d) & reach[:, None]
             d = np.where(better, alt, d)
             nx = np.where(better, nx[:, k:k + 1], nx)
-        self.dist, self.next = d, nx
+        return d, nx
 
-    def path(self, a, b):
-        if self.next[a, b] < 0:
+    def path(self, a, b, nxt=None):
+        nxt = self.next if nxt is None else nxt
+        if nxt[a, b] < 0:
             return None
         out, u = [], a
         while u != b:
-            u = int(self.next[u, b])
+            u = int(nxt[u, b])
             out.append(u)
         return out
+
+    def zpath(self, a, b):
+        return self.path(a, b, self.znext)
 
 class Task:
     def __init__(self, **kw):
@@ -297,6 +503,7 @@ class Player:
         self.combo, self.last_score_at = 0, -999.0
         self.protect_until = -1.0
         self.revived_at = -999.0
+        self.ammo, self.kills, self.fire_cooldown = 0, 0, 0.0
 
 class Zombie:
     def __init__(self, id, node, pos, from_player, rng):
@@ -381,13 +588,14 @@ class GreedyBot:
             return steps + [_step("wait", seconds=2)]
         return steps + _do_task(best)
 
-ACTIONS = {"move", "goto", "pickup", "dropoff", "take_medkit", "use_medkit", "heal", "revive", "wait", "fix"}
-EMERGENCY = {"move", "goto", "wait", "use_medkit", "heal"}
-S_TASK, S_EVENT, S_SPREAD, S_ZOMBIE = 1, 2, 3, 4
+ACTIONS = {"move", "goto", "pickup", "dropoff", "take_medkit", "use_medkit", "heal", "revive", "wait", "fix", "take_weapon", "drop", "drop_medkit", "drop_weapon"}
+EMERGENCY = {"move", "goto", "wait", "use_medkit", "heal", "drop", "drop_medkit", "drop_weapon"}
+DROPS = {"drop", "drop_medkit", "drop_weapon"}
+S_TASK, S_EVENT, S_SPREAD, S_ZOMBIE, S_BLOCK = 1, 2, 3, 4, 5
 
 INCIDENTS = {
     "outbreak": ("感染爆發", 8.0, 1, 60.0, 60),
-    "bridge": ("橋樑損毀", 10.0, 1, 60.0, 50),
+    "bridge": ("橋樑損毀", 10.0, 1, 9999.0, 50),
     "airdrop": ("物資空投", 4.0, 1, 45.0, 40),
     "trapped": ("受困人群", 20.0, 2, 75.0, 120),
     "guard": ("撤離點告急", 8.0, 1, 50.0, 60),
@@ -457,7 +665,11 @@ class Sim:
         drng = DotNetRandom(_i32(self.cfg["seed"] * 7919 + 17))
         west, east = DISTRICTS[drng.next(4)], DISTRICTS[drng.next(4)]
         for nd in m.nodes:
-            nd.district = west if nd.id % m.cols <= m.river_col else east
+            nd.district = west if m.west(nd.id) else east
+        for nd in m.nodes:
+            if nd.type == "armory":
+                nd.weapons = c["weaponStock"]
+        self.player_shots = []
         self.parts, self.parts_required, self.ready_at, self.depart_at = 0, 0, -1.0, -1.0
         self.guard_kills = 0
         self.guard_cooldown, self.guard_shots = 0.0, []
@@ -469,6 +681,7 @@ class Sim:
         self.heli_boost = False
         self.fuel, self.fuel_required, self.fuel_discount = 0, 0, 0
         self.incident_timer = 25.0
+        self.roadblock_timer, self.roadblock_index = 40.0, 0
         self.last_phase = 0
         self.last_generator_break = -999.0
         xs = [n.pos[0] for n in m.nodes]; ys = [n.pos[1] for n in m.nodes]
@@ -570,6 +783,7 @@ class Sim:
             self._check_medevac(dt)
             self._update_generators()
             self._spawn_incidents(dt)
+            self._roadblocks(dt)
         else:
             self._events(dt)
         self._restock(dt); self._bots(dt)
@@ -600,6 +814,7 @@ class Sim:
                     self.guard_kills += 1
                     self.guard_cooldown = self.cfg["guardFireInterval"]
                     self.guard_shots = (self.guard_shots + [(self.time, best.pos)])[-20:]
+        self._weapons(dt)
         self._damage(dt)
         if self.cfg["escape"]:
             self._helicopter()
@@ -636,20 +851,30 @@ class Sim:
     def no_respawn(self):
         return self.cfg["escape"] and self.ready_at >= 0
 
+    def doomed(self, p):
+        return self.cfg["escape"] and not self.in_zone(p.pos)
+
     def _spawn_fuel(self):
         c, m = self.cfg, self.map
         self.use_stream(S_EVENT, 100000)
         n = max(1, len(self.players))
         self.fuel_required = max(2, _round(n * c["fuelPerPlayer"]) - self.fuel_discount)
 
-        far = [nd for nd in m.nodes if nd.type == "road" and 6 <= m.dist[self.extraction, nd.id] <= 20 and self.in_zone(nd.pos)]
-        if not far:
-            far = [nd for nd in m.nodes if nd.type == "road" and m.dist[self.extraction, nd.id] >= 6] or \
-                  [nd for nd in m.nodes if nd.type == "road"]
+        def ring(nd):
+            r, cc = nd.id // m.cols, nd.id % m.cols
+            return min(r, m.rows - 1 - r, cc, m.cols - 1 - cc)
+        pool = [nd for nd in m.nodes if nd.type == "road" and m.dist[self.extraction, nd.id] >= 6 and self.in_zone(nd.pos)]
+        if not pool:
+            pool = [nd for nd in m.nodes if nd.type == "road" and m.dist[self.extraction, nd.id] >= 6] or \
+                   [nd for nd in m.nodes if nd.type == "road"]
+        edge = min(ring(nd) for nd in pool)
+        far = [nd for nd in pool if ring(nd) <= edge]
+        if len(far) < 4:
+            far = [nd for nd in pool if ring(nd) <= edge + 1]
         reward = _round(c["fuelReward"] * (1 + 0.25 * self.phase))
         for _ in range(self.fuel_required + c["fuelSpare"] + int(n * c["fuelSparePerPlayer"])):
             node = far[self.rng.next(len(far))].id
-            self.tasks.append(Task(id=self._id("task"), type="fuel", origin=node, dest=self.extraction, weight=2,
+            self.tasks.append(Task(id=self._id("task"), type="fuel", origin=node, dest=self.extraction, weight=int(c["fuelWeight"]),
                                    reward=reward, available_at=self.time, expires_at=-1.0, status="open"))
 
     @property
@@ -729,7 +954,7 @@ class Sim:
                     self.city_infection += 1
         self.tasks = [t for t in self.tasks if not (t.status in ("done", "expired") and self.time - t.expires_at > 30 and t.carrier < 0)]
         self.task_timer -= dt
-        if self.task_timer > 0 or self.no_respawn:
+        if self.task_timer > 0 or (self.cfg["escape"] and self.ready_at >= 0):
             return
         self.task_timer = self.cfg["taskInterval"] / (self.map.scale * self.task_scale * (1 + 0.35 * self.phase))
         self.use_stream(S_TASK, self.task_slot); self.task_slot += 1
@@ -838,9 +1063,9 @@ class Sim:
         self.zombie_timer -= dt
         if self.zombie_timer > 0:
             return
-        self.zombie_timer = (6 - self.phase) / self.map.scale
+        self.zombie_timer = (6 - self.phase) / self.map.scale / self.cfg["zombieSpawnMul"]
         self.use_stream(S_ZOMBIE, self.zombie_spawn_index); self.zombie_spawn_index += 1
-        cap = _round((3 + 21 * self.time / self.cfg["matchDuration"]) * self.map.scale)
+        cap = _round((self.cfg["zombieCapBase"] + self.cfg["zombieCapGrowth"] * self.time / self.cfg["matchDuration"]) * self.map.scale)
         if sum(1 for z in self.zombies if z.from_player < 0) < cap:
             self.spawn_zombie_at_infected()
 
@@ -892,6 +1117,28 @@ class Sim:
             return
         e.blocked_until = self.time + 45 + self.rng.next_double() * 45
         self.log("failure", f"有一段{'橋' if e.bridge else '道路'}壞了，{e.blocked_until - self.time:.0f} 秒後修好")
+
+    def _roadblocks(self, dt):
+        self.roadblock_timer -= dt
+        if self.roadblock_timer > 0:
+            return
+        c, m = self.cfg, self.map
+        self.roadblock_timer = c["roadblockInterval"] / (1 + 0.15 * self.phase)
+        self.use_stream(S_BLOCK, self.roadblock_index)
+        self.roadblock_index += 1
+        opn = [e for e in m.edges if not e.blocked]
+        busy = [e for e in opn if e.bridge or e.kind == 1]
+        for _ in range(5):
+            e = busy[self.rng.next(len(busy))] if busy and self.rng.next_double() < 0.5 else opn[self.rng.next(len(opn))]
+            e.blocked = True
+            m.recompute()
+            if not m.connected():
+                e.blocked = False
+                m.recompute()
+                continue
+            e.blocked_until = self.time + c["roadblockTime"] * (0.75 + 0.5 * self.rng.next_double())
+            self.log("roadblock", f"屍潮堵住了路口 {e.a} 和 {e.b} 之間的路，{e.blocked_until - self.time:.0f} 秒後才散開", e.a)
+            return
 
     def incident_by_id(self, i):
         for inc in self.incidents:
@@ -976,7 +1223,7 @@ class Sim:
         return [n for n in self.map.nodes if n.type == "generator"]
 
     def _west(self, node):
-        return node % self.map.cols <= self.map.river_col
+        return self.map.west(node)
 
     def _generators_for(self, factory):
         gens = self.generators()
@@ -1269,6 +1516,8 @@ class Sim:
         for n in self.map.nodes:
             if n.type == "supply" and n.medkits < 5:
                 n.medkits += 1
+            elif n.type == "armory" and n.weapons < self.cfg["weaponStock"]:
+                n.weapons += 1
 
     def _bots(self, dt):
         self.bot_timer -= dt
@@ -1302,7 +1551,8 @@ class Sim:
         return None
 
     def load(self, p):
-        return sum((self.task_by_id(i).weight if self.task_by_id(i) else 0) for i in p.cargo) + p.medkits
+        return sum((self.task_by_id(i).weight if self.task_by_id(i) else 0) for i in p.cargo) + p.medkits + \
+            (self.cfg["weaponWeight"] if p.ammo > 0 else 0)
 
     def speed(self, p):
         s = self.cfg["playerSpeed"] * (1 - self.cfg["loadSpeedPenalty"] * self.load(p))
@@ -1315,7 +1565,7 @@ class Sim:
     def is_emergency(self, steps):
         if not steps or not all(s["action"] in EMERGENCY for s in steps):
             return False
-        if any(s["action"] in ("use_medkit", "heal") for s in steps):
+        if any(s["action"] in ("use_medkit", "heal") or s["action"] in DROPS for s in steps):
             return True
         moves = [s for s in steps if s["action"] in ("move", "goto")]
         return bool(moves) and 0 <= moves[-1]["node"] < len(self.map.nodes) and self.map.nodes[moves[-1]["node"]].safe
@@ -1365,11 +1615,12 @@ class Sim:
         if p.state == "downed":
             p.downed_timer -= dt
             if p.downed_timer <= 0:
-                if self.no_respawn:
+                if self.doomed(p):
                     self._eliminate(p, p.eliminated_reason or "沒人來救")
                 else:
                     self._respawn(p)
             return
+        self._drop_now(p)
         if p.next_node >= 0:
             self._advance(p, self.speed(p), dt)
             return
@@ -1413,6 +1664,10 @@ class Sim:
                 self._fail(p, s, f"goto：無法抵達節點 {s['node']}"); return
             p.next_node, p.progress = hop, 0.0
             return
+        if a in DROPS:
+            self._do_drop(p, s)
+            p.plan_index += 1
+            return
         t = self.task_by_id(s["task"]) if s["task"] >= 0 else None
         if (a == "pickup" and s["task"] in p.cargo) or (a == "dropoff" and t is not None and t.completed_by == p.id):
             p.plan_index += 1; return
@@ -1425,6 +1680,59 @@ class Sim:
         p.action_timer = {"heal": 4.0, "revive": 3.0, "use_medkit": 1.5}.get(
             a, min(30.0, max(0.1, s["seconds"])) if a == "wait" else min(30.0, max(1.0, s["seconds"] or 10.0)) if a == "fix" else 1.0)
         p.plan_index += 1
+
+    def _drop_now(self, p):
+        while p.plan_index < len(p.plan) and p.plan[p.plan_index]["action"] in DROPS:
+            self._do_drop(p, p.plan[p.plan_index])
+            p.plan_index += 1
+
+    def _do_drop(self, p, s):
+        at = p.next_node if p.next_node >= 0 and p.progress > 0.5 else p.node
+        a = s["action"]
+        if a == "drop_medkit":
+            if p.medkits > 0:
+                p.medkits -= 1
+            else:
+                p.last_error = f"[{self.time:.0f}s] drop_medkit：沒有醫療包（已略過此步）"
+            return
+        if a == "drop_weapon":
+            if p.ammo > 0:
+                p.ammo = 0
+            else:
+                p.last_error = f"[{self.time:.0f}s] drop_weapon：沒有武器（已略過此步）"
+            return
+        t = self.task_by_id(s["task"])
+        if t is None or s["task"] not in p.cargo:
+            p.last_error = f"[{self.time:.0f}s] drop：你沒有攜帶委託 #{s['task']}（已略過此步）"
+            return
+        p.cargo.remove(t.id)
+        t.status, t.carrier, t.origin = "open", -1, at
+        t.expires_at = -1.0 if t.type == "fuel" else self.time + 60
+        for k in range(len(p.plan) - 1, p.plan_index, -1):
+            if p.plan[k]["action"] == "dropoff" and p.plan[k]["task"] == t.id:
+                del p.plan[k]
+
+    def _weapons(self, dt):
+        c = self.cfg
+        for p in self.players:
+            if p.state != "active" or p.ammo <= 0:
+                continue
+            p.fire_cooldown -= dt
+            if p.fire_cooldown > 0:
+                continue
+            best, bd = None, c["weaponRange"]
+            for z in self.zombies:
+                d = _vd(z.pos, p.pos)
+                if d <= bd:
+                    best, bd = z, d
+            if best is None:
+                continue
+            self.zombies.remove(best)
+            p.ammo -= 1
+            p.kills += 1
+            p.score += c["killReward"]
+            p.fire_cooldown = c["weaponInterval"]
+            self.player_shots = (self.player_shots + [(p.pos, best.pos, self.time)])[-30:]
 
     def _validate(self, p, s):
         node, a, cap = self.map.nodes[p.node], s["action"], self.cfg["capacity"]
@@ -1451,6 +1759,15 @@ class Sim:
                 return "take_medkit：補給站已無醫療包"
             if self.load(p) + 1 > cap:
                 return "take_medkit：背包容量不足"
+        elif a == "take_weapon":
+            if node.type != "armory":
+                return "take_weapon：這裡不是軍火庫"
+            if node.weapons <= 0:
+                return "take_weapon：軍火庫沒有武器了"
+            if p.ammo > 0:
+                return "take_weapon：你已經有武器了"
+            if self.load(p) + self.cfg["weaponWeight"] > cap:
+                return "take_weapon：背包容量不足"
         elif a == "use_medkit":
             return None if p.medkits > 0 else "use_medkit：沒有醫療包"
         elif a == "heal":
@@ -1489,13 +1806,16 @@ class Sim:
             p.cargo.remove(t.id)
             if not (c["escape"] and p.node == self.extraction):
                 self._noise(p.node, c["actionNoiseRadius"], c["actionNoiseDuration"], "dropoff")
+            useless = c["escape"] and ((t.type == "part" and self.ready_at >= 0) or (t.type == "fuel" and self.fuel >= self.fuel_required))
             gain = t.reward
-            on_time = t.urgent and self.time <= t.deadline
+            on_time = not useless and t.urgent and self.time <= t.deadline
             if on_time:
                 gain += t.bonus
             if c["escape"] and t.type == "part" and c["partDecay"] > 0:
                 gain = _round(gain * c["partDecay"] / (c["partDecay"] + p.parts))
-            if c["escape"]:
+            if useless:
+                gain = 0
+            elif c["escape"]:
                 gain = self._combo_gain(p, gain)
             p.score += gain
             t.status, t.carrier, t.completed_by, t.expires_at = "done", -1, p.id, self.time
@@ -1516,7 +1836,7 @@ class Sim:
                 p.delivered += 1
             kind = {"rescue": "救援", "part": "零件", "fuel": "油桶"}.get(t.type, "配送")
             combo = f"（連續得分 {p.combo + 1} 次）" if c["escape"] and p.combo > 0 else ""
-            self.log("done", f"{p.name} 完成{kind} #{t.id} +{gain}{'（限時獎勵）' if on_time else ''}{combo}")
+            self.log("done", f"{p.name} 完成{kind} #{t.id} +{gain}{'（已經不需要了）' if useless else ''}{'（限時獎勵）' if on_time else ''}{combo}")
             b = self.batch_of(t)
             if b is not None and c["coop"]:
                 b.delivered += 1
@@ -1538,6 +1858,9 @@ class Sim:
         elif a == "take_medkit":
             self.map.nodes[p.node].medkits -= 1
             p.medkits += 1
+        elif a == "take_weapon":
+            self.map.nodes[p.node].weapons -= 1
+            p.ammo, p.fire_cooldown = c["weaponShots"], 0.0
         elif a == "use_medkit":
             p.medkits -= 1
             p.hp, p.infection = min(100.0, p.hp + 40), max(0.0, p.infection - 25)
@@ -1586,14 +1909,15 @@ class Sim:
                 t.status, t.carrier, t.origin = "open", -1, p.node
                 t.expires_at = -1.0 if t.type == "fuel" else self.time + 60
         p.cargo = []
+        p.ammo = 0
         p.downs += 1
         penalty = c["respawnPenalty"] * (min(p.downs, 3) if c["escape"] else 1)
         p.score -= penalty
         p.combo, p.last_score_at = 0, -999.0
         self.city_infection += 1
         p.eliminated_reason = reason
-        if self.no_respawn:
-            self.log("down", f"{p.name} 倒地了！{c['downedTime']:.0f} 秒內沒人來救就逃不掉了", p.node)
+        if self.doomed(p):
+            self.log("down", f"{p.name} 在安全區外倒地了！{c['downedTime']:.0f} 秒內沒人來救就逃不掉了", p.node)
         else:
             self.log("down", f"{p.name} 倒地（{reason}），掉落貨物、扣 {penalty} 分，{c['downedTime']:.0f} 秒內有人來救 +{c['reviveBonus']}，不然回撤離點復活", p.node)
 
@@ -1634,7 +1958,7 @@ class Sim:
 
     def _update_zombie(self, z, dt):
         if z.next_node >= 0:
-            self._advance(z, self.zombie_speed, dt)
+            self._advance(z, self.zombie_speed * (self.cfg["zombieChaseMul"] if z.mode == "chase" else 1.0), dt)
             return
         if z.wait > 0:
             z.wait -= dt
@@ -1642,7 +1966,7 @@ class Sim:
                 return
         self._decide(z)
         if z.target >= 0 and z.target != z.node:
-            hop = int(self.map.next[z.node, z.target])
+            hop = int(self.map.znext[z.node, z.target])
             if hop >= 0:
                 z.next_node, z.progress = hop, 0.0
             else:
@@ -1662,7 +1986,7 @@ class Sim:
             return
         if z.mode != "wander" or z.target < 0 or z.target == z.node:
             z.mode = "wander"
-            cand = [n for n in m.nodes if not n.safe and 6 <= m.dist[z.node, n.id] <= 18] or \
+            cand = [n for n in m.nodes if not n.safe and 6 <= m.zdist[z.node, n.id] <= 18] or \
                    [n for n in m.nodes if not n.safe and n.id != z.node]
             z.target = cand[z.rng.next(len(cand))].id if cand else -1
 
@@ -1684,7 +2008,7 @@ class Sim:
             path.append(z.next_node)
             frm = z.next_node
         if z.target >= 0 and z.target != frm:
-            path += self.map.path(frm, z.target) or []
+            path += self.map.zpath(frm, z.target) or []
         return path[:max_len]
 
     def _prey(self, z):
@@ -1812,7 +2136,7 @@ class Sim:
 
         def unit(p):
             return dict(id=p.id, name=p.name, state=p.state, node=p.node, next_node=p.next_node, hp=p.hp,
-                        infection=p.infection, score=p.score, load=self.load(p), capacity=c["capacity"], medkits=p.medkits,
+                        infection=p.infection, score=p.score, load=self.load(p), capacity=c["capacity"], medkits=p.medkits, ammo=p.ammo,
                         speed=self.speed(p), cargo=list(p.cargo), plan=[dict(s) for s in p.plan], plan_index=p.plan_index,
                         busy=p.pending["action"] if p.pending else ("moving" if p.next_node >= 0 else ""),
                         last_error=p.last_error, next_plan_at=p.last_plan_time + c["planCooldown"])
@@ -1828,8 +2152,7 @@ class Sim:
                         zone_damage=c["zoneDamage"], escape_bonus=c["escapeBonus"], evacuated=self.evacuated,
                         speed_boost_until=self.speed_boost_until, guard_down_until=self.guard_down_until,
                         zombie_stun_until=self.zombie_stun_until,
-                        heli_boost=self.heli_boost, fuel=self.fuel, fuel_required=self.fuel_required,
-                        no_respawn=self.no_respawn),
+                        heli_boost=self.heli_boost, fuel=self.fuel, fuel_required=self.fuel_required),
             incidents=[dict(id=i.id, type=i.kind, name=i.name, node=i.node, deadline=i.deadline, progress=i.progress,
                             need=i.need, min_people=i.min_people, workers=i.workers, status=i.status,
                             reward=_round(i.reward * (1 + 0.25 * self.phase))) for i in self.incidents], phase_name=PHASE_KEYS[self.phase], end_reason=self.end_reason,
@@ -1840,13 +2163,15 @@ class Sim:
                        player_speed=c["playerSpeed"], load_speed_penalty=c["loadSpeedPenalty"], plan_cooldown=c["planCooldown"],
                        downed_time=c["downedTime"], zombie_speed=c["zombieSpeed"], zombie_speed_per_phase=c["zombieSpeedPerPhase"],
                        zombie_sight=c["zombieSight"], zombie_attack_range=c["zombieAttackRange"], zombie_damage=c["zombieDamage"],
-                       zombie_infection=c["zombieInfection"], action_noise_radius=c["actionNoiseRadius"],
+                       zombie_infection=c["zombieInfection"], zombie_chase_mul=c["zombieChaseMul"],
+                       action_noise_radius=c["actionNoiseRadius"],
                        action_noise_duration=c["actionNoiseDuration"], survivor_noise_radius=c["survivorNoiseRadius"],
-                       scream_radius=c["screamRadius"]),
-            nodes=[dict(id=n.id, type=n.type, x=n.pos[0], y=n.pos[1], infection=n.infection, medkits=n.medkits, safe=n.safe,
+                       scream_radius=c["screamRadius"], weapon_weight=c["weaponWeight"], weapon_shots=c["weaponShots"],
+                       kill_reward=c["killReward"], fuel_weight=c["fuelWeight"], weapon_range=c["weaponRange"], weapon_interval=c["weaponInterval"]),
+            nodes=[dict(id=n.id, type=n.type, x=n.pos[0], y=n.pos[1], infection=n.infection, medkits=n.medkits, weapons=n.weapons, safe=n.safe,
                         powered=self.powered(n), district=n.district) for n in m.nodes],
             edges=[dict(id=e.id, a=e.a, b=e.b, length=e.length, blocked=e.blocked, bridge=e.bridge,
-                        blocked_until=e.blocked_until if e.blocked else 0) for e in m.edges],
+                        blocked_until=e.blocked_until if e.blocked else 0, kind=("road", "highway", "mud")[e.kind]) for e in m.edges],
             tasks=[dict(id=t.id, type=t.type, origin=t.origin, dest=t.dest, weight=t.weight, reward=t.reward, bonus=t.bonus,
                         urgent=t.urgent, deadline=t.deadline, expires_at=t.expires_at, status=t.status, carrier=t.carrier,
                         batch=t.batch, available_at=t.available_at) for t in self.tasks if t.status in live],
@@ -1857,7 +2182,7 @@ class Sim:
                           next_node=p.next_node, progress=p.progress, x=p.pos[0], y=p.pos[1], hp=p.hp, infection=p.infection,
                           downed_timer=p.downed_timer, score=p.score, load=self.load(p), delivered=p.delivered, rescued=p.rescued, downs=p.downs,
                           city_reduced=p.city_reduced, role=p.role, targets=self._targets(p), parts=p.parts, escaped=p.escaped,
-                          fixing=self._fixing(p), fixed=p.fixed, fuel=p.fuel, combo=self.combo_of(p))
+                          fixing=self._fixing(p), fixed=p.fixed, fuel=p.fuel, combo=self.combo_of(p), ammo=p.ammo, kills=p.kills)
                      for p in self.players],
             zombies=[dict(id=z.id, node=z.node, next_node=z.next_node, x=z.pos[0], y=z.pos[1], from_player=z.from_player,
                           progress=z.progress, mode=z.mode, target=z.target, chasing=z.chasing, path=self.zombie_path(z))
@@ -1869,11 +2194,11 @@ class Sim:
         )
 
 def classmate_policy():
-    from apocalypse_sdk import CityGraph, dropoff, fix, goto, heal, pickup, revive, use_medkit
+    from apocalypse_sdk import CityGraph, drop, dropoff, fix, goto, heal, pickup, revive, use_medkit
 
     def policy(st):
         me = st.you
-        g = CityGraph(st)
+        g = CityGraph(st, zombie_penalty=3, zombie_lookahead=10)
         ex, depart = st.extraction, st.escape.get("depart_at", -1)
         if depart > 0 and depart - st.time < g.dist(st.here, ex) / me["speed"] + 15:
             if st.here == ex and st.is_idle:
@@ -1887,6 +2212,11 @@ def classmate_policy():
             if me["medkits"] > 0:
                 return [use_medkit()]
             return [goto(g.nearest(st.here, st.nodes_of("hospital"))), heal()]
+        e = st.escape
+        useless = [t for t in st.my_cargo() if (t["type"] == "part" and e["ready_at"] >= 0)
+                   or (t["type"] == "fuel" and e["fuel"] >= e["fuel_required"])]
+        if useless:
+            return [drop(t["id"]) for t in useless]
         if st.time < me["next_plan_at"]:
             return None
         for q in st.players:
@@ -1904,7 +2234,7 @@ def classmate_policy():
         claimed = st.claimed_tasks()
         tasks = [t for t in st.open_tasks() if t["id"] not in claimed]
         if st.escape.get("ready_at", -1) >= 0:
-            fuel = [t for t in tasks if t["type"] == "fuel"]
+            fuel = [t for t in tasks if t["type"] == "fuel"] if st.escape["fuel"] < st.escape["fuel_required"] else []
             if not fuel:
                 return None if st.here == ex else [goto(ex)]
             tasks = fuel

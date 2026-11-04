@@ -7,11 +7,11 @@ using UnityEngine;
 namespace Apocalypse
 {
 
-    [Serializable] public class NodeDto { public int id; public string type; public float x, y, infection; public int medkits; public bool safe, powered; public string district; }
-    [Serializable] public class EdgeDto { public int id, a, b; public float length; public bool blocked, bridge; public float blocked_until; }
+    [Serializable] public class NodeDto { public int id; public string type; public float x, y, infection; public int medkits, weapons; public bool safe, powered; public string district; }
+    [Serializable] public class EdgeDto { public int id, a, b; public float length; public bool blocked, bridge; public float blocked_until; public string kind; }
     [Serializable] public class TaskDto { public int id; public string type; public int origin, dest, weight, reward, bonus, batch; public bool urgent; public float deadline, expires_at, available_at; public string status; public int carrier; }
     [Serializable] public class BatchDto { public int id, origin, owner, bonus, delivered; public float deadline; public bool paid, failed; public int[] tasks; }
-    [Serializable] public class PlayerDto { public int id; public string name, color, state, bot; public int node, next_node, score, load, delivered, rescued, downs; public float progress, x, y, hp, infection, downed_timer, city_reduced; public string role; public int[] targets; public int parts; public bool escaped; public int[] fixing; public int @fixed, fuel, combo; }
+    [Serializable] public class PlayerDto { public int id; public string name, color, state, bot; public int node, next_node, score, load, delivered, rescued, downs; public float progress, x, y, hp, infection, downed_timer, city_reduced; public string role; public int[] targets; public int parts; public bool escaped; public int[] fixing; public int @fixed, fuel, combo, ammo, kills; }
     [Serializable] public class ZombieDto { public int id, node, next_node, from_player, target, chasing; public string mode; public float x, y, progress; public int[] path; }
     [Serializable] public class NoiseDto { public int id, node; public float x, y, radius, until; public string source; }
     [Serializable] public class EventDto { public float time; public string type, text; }
@@ -22,7 +22,7 @@ namespace Apocalypse
     {
         public int id = -1;
         public string name = "", state = "", busy = "", last_error = "";
-        public int node, next_node, score, load, capacity, medkits, plan_index;
+        public int node, next_node, score, load, capacity, medkits, plan_index, ammo;
         public float hp, infection, speed, next_plan_at;
         public int[] cargo = new int[0];
         public StepDto[] plan = new StepDto[0];
@@ -38,8 +38,10 @@ namespace Apocalypse
     {
         public int capacity, max_plan_steps, survival_bonus, respawn_penalty;
         public float player_speed, load_speed_penalty, plan_cooldown, downed_time;
-        public float zombie_speed, zombie_speed_per_phase, zombie_sight, zombie_attack_range, zombie_damage, zombie_infection;
+        public float zombie_speed, zombie_speed_per_phase, zombie_sight, zombie_attack_range, zombie_damage, zombie_infection, zombie_chase_mul;
         public float action_noise_radius, action_noise_duration, survivor_noise_radius, scream_radius;
+        public int weapon_weight, weapon_shots, kill_reward, fuel_weight;
+        public float weapon_range, weapon_interval;
     }
 
     [Serializable]
@@ -50,7 +52,7 @@ namespace Apocalypse
         public float ready_at, depart_at, zone_x, zone_y, zone_radius, zone_damage;
         public int evacuated;
         public float speed_boost_until, guard_down_until, zombie_stun_until;
-        public bool heli_boost, no_respawn;
+        public bool heli_boost;
         public int fuel, fuel_required;
     }
 
@@ -195,7 +197,7 @@ namespace Apocalypse
                     zone_y = sim.map.nodes[sim.extraction].pos.y, zone_radius = sim.ZoneRadius, zone_damage = cfg.zoneDamage,
                     escape_bonus = cfg.escapeBonus, evacuated = sim.evacuated, speed_boost_until = sim.speedBoostUntil,
                     guard_down_until = sim.guardDownUntil, heli_boost = sim.heliBoost, zombie_stun_until = sim.zombieStunUntil,
-                    fuel = sim.fuel, fuel_required = sim.fuelRequired, no_respawn = sim.NoRespawn,
+                    fuel = sim.fuel, fuel_required = sim.fuelRequired,
                 },
                 incidents = sim.incidents.Select(i => new IncidentDto
                 {
@@ -211,17 +213,20 @@ namespace Apocalypse
                     downed_time = cfg.downedTime, zombie_speed = cfg.zombieSpeed, zombie_speed_per_phase = cfg.zombieSpeedPerPhase,
                     zombie_sight = cfg.zombieSight, zombie_attack_range = cfg.zombieAttackRange,
                     zombie_damage = cfg.zombieDamage, zombie_infection = cfg.zombieInfection,
+                    zombie_chase_mul = cfg.zombieChaseMul,
                     action_noise_radius = cfg.actionNoiseRadius, action_noise_duration = cfg.actionNoiseDuration,
                     survivor_noise_radius = cfg.survivorNoiseRadius, scream_radius = cfg.screamRadius,
+                    weapon_weight = cfg.weaponWeight, weapon_shots = cfg.weaponShots, kill_reward = cfg.killReward, fuel_weight = cfg.fuelWeight,
+                    weapon_range = cfg.weaponRange, weapon_interval = cfg.weaponInterval,
                 },
                 nodes = sim.map.nodes.Select(n => new NodeDto
                 {
-                    id = n.id, type = Lower(n.type), x = n.pos.x, y = n.pos.y, infection = n.infection, medkits = n.medkits, safe = n.Safe, powered = sim.Powered(n), district = GameSim.Districts[n.district],
+                    id = n.id, type = Lower(n.type), x = n.pos.x, y = n.pos.y, infection = n.infection, medkits = n.medkits, weapons = n.weapons, safe = n.Safe, powered = sim.Powered(n), district = GameSim.Districts[n.district],
                 }).ToArray(),
                 edges = sim.map.edges.Select(e => new EdgeDto
                 {
                     id = e.id, a = e.a, b = e.b, length = e.length, blocked = e.blocked, bridge = e.bridge,
-                    blocked_until = e.blocked ? e.blockedUntil : 0,
+                    blocked_until = e.blocked ? e.blockedUntil : 0, kind = e.kind == 1 ? "highway" : e.kind == 2 ? "mud" : "road",
                 }).ToArray(),
                 tasks = sim.tasks.Where(t => t.status == TaskStatus.Announced || t.status == TaskStatus.Open || t.status == TaskStatus.Carried).Select(t => new TaskDto
                 {
@@ -240,7 +245,7 @@ namespace Apocalypse
                     id = p.id, name = p.name, color = Hex(p.color), state = Lower(p.state), bot = p.botKind,
                     node = p.node, next_node = p.nextNode, progress = p.progress, x = p.pos.x, y = p.pos.y,
                     hp = p.hp, infection = p.infection, downed_timer = p.downedTimer,
-                    score = p.score, load = sim.Load(p), delivered = p.delivered, rescued = p.rescued, downs = p.downs, city_reduced = p.cityReduced, role = p.role, targets = sim.Targets(p).ToArray(), parts = p.parts, escaped = p.escaped, fixing = sim.Fixing(p).ToArray(), @fixed = p.fixedCount, fuel = p.fuel, combo = sim.ComboOf(p),
+                    score = p.score, load = sim.Load(p), delivered = p.delivered, rescued = p.rescued, downs = p.downs, city_reduced = p.cityReduced, role = p.role, targets = sim.Targets(p).ToArray(), parts = p.parts, escaped = p.escaped, fixing = sim.Fixing(p).ToArray(), @fixed = p.fixedCount, fuel = p.fuel, combo = sim.ComboOf(p), ammo = p.ammo, kills = p.kills,
                 }).ToArray(),
                 zombies = sim.zombies.Select(z => new ZombieDto
                 {
@@ -271,7 +276,7 @@ namespace Apocalypse
         {
             d.id = u.id; d.name = u.name; d.state = Lower(u.state);
             d.node = u.node; d.next_node = u.nextNode; d.hp = u.hp; d.infection = u.infection;
-            d.score = u.score; d.load = sim.Load(u); d.capacity = sim.cfg.capacity; d.medkits = u.medkits;
+            d.score = u.score; d.load = sim.Load(u); d.capacity = sim.cfg.capacity; d.medkits = u.medkits; d.ammo = u.ammo;
             d.speed = sim.Speed(u); d.cargo = u.cargo.ToArray();
             d.plan = u.plan.Select(ToDto).ToArray(); d.plan_index = u.planIndex;
             d.busy = u.pending != null ? u.pending.action : (u.nextNode >= 0 ? "moving" : "");

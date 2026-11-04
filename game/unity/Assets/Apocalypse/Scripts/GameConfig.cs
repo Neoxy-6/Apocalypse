@@ -16,7 +16,7 @@ namespace Apocalypse
 
         public int mapCols = 10;
         public int mapRows = 8;
-        public int bridges = 4;
+        public int bridges = 2;
 
         public float batchChance = 0.6f;
         public int batchMin = 3, batchMax = 5;
@@ -39,10 +39,11 @@ namespace Apocalypse
 
         public bool escape = true;
         public float partsBase = 0f;
-        public float partsPerPlayer = 23f;
-        public float partsCrowding = 0.3f;
+        public float partsPerPlayer = 9.2f;
+        public float partsCrowding = 0.15f;
 
         public float incidentInterval = 30f;
+        public float roadblockInterval = 45f, roadblockTime = 60f;
         public int civilianZombies = 1;
         public float civiliansPerPlayer = 2.5f;
         public int trappedCivilians = 4;
@@ -87,19 +88,24 @@ namespace Apocalypse
         public int maxPlanSteps = 200;
         public int capacity = 10;
         public float playerSpeed = 3f;
-        public float loadSpeedPenalty = 0.02f;
+        public float loadSpeedPenalty = 0.05f;
+        public int fuelWeight = 4;
+        public int weaponWeight = 4, weaponShots = 8, weaponStock = 2, killReward = 5;
+        public float weaponRange = 3.5f, weaponInterval = 1.2f;
         public float downedTime = 15f;
         public int respawnPenalty = 50;
         public float respawnHp = 70f;
         public int survivalBonus = 120;
         public int reviveBonus = 60;
 
-        public float zombieSpeed = 1.3f;
+        public float zombieSpeed = 1.4f;
         public float zombieSpeedPerPhase = 0.2f;
         public float zombieSight = 5.5f;
         public float zombieAttackRange = 0.9f;
-        public float zombieDamage = 3.5f;
-        public float zombieInfection = 2f;
+        public float zombieDamage = 5.5f;
+        public float zombieInfection = 2.5f;
+        public float zombieChaseMul = 1.25f;
+        public float zombieCapBase = 6f, zombieCapGrowth = 40f, zombieSpawnMul = 1.6f;
 
         public float actionNoiseRadius = 10f;
         public float actionNoiseDuration = 12f;

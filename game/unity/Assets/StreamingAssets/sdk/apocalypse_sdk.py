@@ -10,6 +10,7 @@ import requests
 __all__ = [
     "Game", "State", "CityGraph", "ApiError", "benchmark", "test_local", "play", "draw", "replay",
     "move", "goto", "pickup", "dropoff", "take_medkit", "use_medkit", "heal", "revive", "wait", "fix",
+    "take_weapon", "drop", "drop_medkit", "drop_weapon",
 ]
 
 def _step(action, node=-1, task=-1, target=-1, seconds=0.0):
@@ -25,6 +26,10 @@ def heal():            return _step("heal")
 def revive(player_id): return _step("revive", target=player_id)
 def wait(seconds=1.0): return _step("wait", seconds=seconds)
 def fix(incident, seconds=10.0): return _step("fix", task=incident, seconds=seconds)
+def take_weapon():     return _step("take_weapon")
+def drop(task):        return _step("drop", task=task)
+def drop_medkit():     return _step("drop_medkit")
+def drop_weapon():     return _step("drop_weapon")
 
 class ApiError(Exception):
     pass

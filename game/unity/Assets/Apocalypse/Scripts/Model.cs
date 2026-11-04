@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Apocalypse
 {
-    public enum NodeType { Road, Shelter, Hospital, Supply, Factory, Generator }
+    public enum NodeType { Road, Shelter, Hospital, Supply, Factory, Generator, Armory }
     public enum TaskType { Delivery, Rescue, Part, Fuel }
     public enum TaskStatus { Announced, Open, Carried, Done, Expired }
     public enum PlayerState { Active, Downed, Eliminated }
@@ -16,7 +16,7 @@ namespace Apocalypse
         public NodeType type;
         public Vector2 pos;
         public float infection;
-        public int medkits;
+        public int medkits, weapons;
         public bool powered;
         public int district;
         public List<int> edges = new List<int>();
@@ -28,6 +28,7 @@ namespace Apocalypse
         public int id, a, b;
         public float length;
         public bool bridge;
+        public int kind;
         public bool blocked;
         public float blockedUntil;
         public int Other(int n) => n == a ? b : a;
@@ -113,6 +114,8 @@ namespace Apocalypse
         public float lastScoreAt = -999f;
         public float protectUntil = -1f;
         public float revivedAt = -999f;
+        public int ammo, kills;
+        public float fireCooldown;
 
         public List<PlanStep> plan = new List<PlanStep>();
         public int planIndex;
