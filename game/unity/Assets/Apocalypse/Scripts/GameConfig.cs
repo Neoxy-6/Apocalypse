@@ -39,7 +39,7 @@ namespace Apocalypse
 
         public bool escape = true;
         public float partsBase = 0f;
-        public float partsPerPlayer = 9.2f;
+        public float partsPerPlayer = 7f;
         public float partsCrowding = 0.15f;
 
         public float incidentInterval = 30f;
@@ -47,7 +47,7 @@ namespace Apocalypse
         public int civilianZombies = 1;
         public float civiliansPerPlayer = 2.5f;
         public int trappedCivilians = 4;
-        public float generatorWeight = 0.12f, generatorCooldown = 90f;
+        public float generatorWeight = 0.04f, generatorCooldown = 90f;
         public float speedBoost = 1.2f, speedBoostTime = 60f;
         public float guardDownTime = 60f;
         public float guardRange = 5f, guardFireInterval = 1f;

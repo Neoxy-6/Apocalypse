@@ -22,10 +22,10 @@ DEFAULTS = dict(
     coop=True, coopCityRate=1.35, cityPerPlayer=0.02, cityPerPoint=0.03, classBonus=200, urgentFailCity=3.0, rescueFailCity=2.0,
     coopTaskPlayers=3.0,
 
-    escape=True, partsBase=0.0, partsPerPlayer=9.2, partsCrowding=0.15, difficulty=1.2, earliestDepart=480.0, departDelay=60.0, escapeBonus=200, earlyBonusPerSec=1.0,
+    escape=True, partsBase=0.0, partsPerPlayer=7.0, partsCrowding=0.15, difficulty=1.2, earliestDepart=480.0, departDelay=60.0, escapeBonus=200, earlyBonusPerSec=1.0,
     zoneStart=90.0, zoneEnd=540.0, zoneMinRadius=7.0, zoneDamage=3.0, zoneInfection=1.0,
 
-    incidentInterval=30.0, roadblockInterval=45.0, roadblockTime=60.0, civilianZombies=1, civiliansPerPlayer=2.5, trappedCivilians=4, generatorWeight=0.12, generatorCooldown=90.0, speedBoost=1.2, speedBoostTime=60.0, guardDownTime=60.0,
+    incidentInterval=30.0, roadblockInterval=45.0, roadblockTime=60.0, civilianZombies=1, civiliansPerPlayer=2.5, trappedCivilians=4, generatorWeight=0.04, generatorCooldown=90.0, speedBoost=1.2, speedBoostTime=60.0, guardDownTime=60.0,
     guardRange=5.0, guardFireInterval=1.0,
 
     fuelPerPlayer=0.6, fuelSpare=4, fuelSparePerPlayer=0.3, fuelReward=80, boardTime=45.0,
@@ -121,16 +121,15 @@ class Node:
         return self.type in ("shelter", "hospital")
 
 class Edge:
-    __slots__ = ("id", "a", "b", "length", "bridge", "blocked", "blocked_until", "kind")
+    __slots__ = ("id", "a", "b", "length", "bridge", "blocked", "blocked_until")
 
     def __init__(self, id, a, b, length, bridge):
         self.id, self.a, self.b, self.length, self.bridge = id, a, b, length, bridge
-        self.blocked, self.blocked_until, self.kind = False, 0.0, 0
+        self.blocked, self.blocked_until = False, 0.0
 
     def other(self, n):
         return self.b if n == self.a else self.a
 
-HIGHWAY_MUL = np.float32(1.6)
 DIAG_DIV, REMOVE_DIV, KEEP_DEG = 14, 1, 2
 
 def _sign(x):
@@ -146,7 +145,6 @@ class CityMap:
         self.river_set: set = set()
         self.cuts: set = set()
         self.side_a: list[bool] = []
-        self.highways: list[list[int]] = []
         self.warp_x: list = []
         self.warp_y: list = []
         self.warp_w = self.warp_h = 0
@@ -174,46 +172,6 @@ class CityMap:
             b = w[(j + 1) * W + i] + (w[(j + 1) * W + i + 1] - w[(j + 1) * W + i]) * fu
             return a + (b - a) * fv
         return lerp2(self.warp_x), lerp2(self.warp_y)
-
-    @staticmethod
-    def _arc(n, lo, hi, rng):
-        a, b = lo + rng.next(hi - lo + 1), lo + rng.next(hi - lo + 1)
-        sign, amp = rng.next(2) * 2 - 1, 1 + rng.next(2)
-        line = []
-        for i in range(n):
-            v = (a * (n - 1 - i) + b * i) // (n - 1) + sign * (amp * 4 * i * (n - 1 - i) // ((n - 1) * (n - 1)))
-            v = min(max(v, lo), hi)
-            if i > 0:
-                v = min(max(v, line[i - 1] - 1), line[i - 1] + 1)
-            line.append(v)
-        return line
-
-    def _build_highway(self, rng, horizontal):
-        cols, rows = self.cols, self.rows
-        n = cols if horizontal else rows
-        line = self._arc(n, 1, (rows if horizontal else cols) - 2, rng)
-
-        def at(i):
-            return line[i] * cols + i if horizontal else i * cols + line[i]
-        run = [at(0)]
-        for i in range(n - 1):
-            a, b = at(i), at(i + 1)
-            straight = line[i] == line[i + 1]
-            r = min(line[i], line[i + 1]) if horizontal else i
-            c = i if horizontal else min(line[i], line[i + 1])
-            ok = not self._cut(a, b) if straight else not self.river_in_cell(r, c)
-            if not ok:
-                if len(run) > 1:
-                    self.highways.append(run)
-                run = [b]
-                continue
-            e = self.find_edge(a, b) or self._add(a, b, False)
-            if e.kind == 0:
-                e.kind = 1
-                e.length = _f32(np.float32(e.length) / HIGHWAY_MUL)
-            run.append(b)
-        if len(run) > 1:
-            self.highways.append(run)
 
     def river_in_cell(self, r, c):
         return (c + 1, r + 1) in self.river_set
@@ -353,9 +311,7 @@ class CityMap:
                 self._add(r * cols + c, (r + 1) * cols + c + 1, False)
             else:
                 self._add(r * cols + c + 1, (r + 1) * cols + c, False)
-        self._build_highway(rng, True)
-        self._build_highway(rng, False)
-        cands = _order_by_random([e for e in self.edges if not e.bridge and e.kind == 0], rng)[:len(self.edges) // REMOVE_DIV]
+        cands = _order_by_random([e for e in self.edges if not e.bridge], rng)[:len(self.edges) // REMOVE_DIV]
         for e in cands:
             if len(self.nodes[e.a].edges) <= KEEP_DEG or len(self.nodes[e.b].edges) <= KEEP_DEG:
                 continue
@@ -435,17 +391,16 @@ class CityMap:
         return bool(np.all(self.dist[0] < INF))
 
     def recompute(self):
-        self.dist, self.next = self._floyd(False)
-        self.zdist, self.znext = self.dist, self.next
+        self.dist, self.next = self._floyd()
 
-    def _floyd(self, zombie):
+    def _floyd(self):
         n = len(self.nodes)
         d = np.full((n, n), np.float32(INF), dtype=np.float32)
         nx = np.full((n, n), -1, dtype=np.int64)
         np.fill_diagonal(d, 0)
         nx[np.arange(n), np.arange(n)] = np.arange(n)
         for e in self.edges:
-            if e.blocked or (zombie and e.kind == 2):
+            if e.blocked:
                 continue
             d[e.a, e.b] = d[e.b, e.a] = e.length
             nx[e.a, e.b], nx[e.b, e.a] = e.b, e.a
@@ -466,9 +421,6 @@ class CityMap:
             u = int(nxt[u, b])
             out.append(u)
         return out
-
-    def zpath(self, a, b):
-        return self.path(a, b, self.znext)
 
 class Task:
     def __init__(self, **kw):
@@ -1126,10 +1078,11 @@ class Sim:
         self.roadblock_timer = c["roadblockInterval"] / (1 + 0.15 * self.phase)
         self.use_stream(S_BLOCK, self.roadblock_index)
         self.roadblock_index += 1
-        opn = [e for e in m.edges if not e.blocked]
-        busy = [e for e in opn if e.bridge or e.kind == 1]
+        opn = [e for e in m.edges if not e.blocked and not e.bridge]
+        if not opn:
+            return
         for _ in range(5):
-            e = busy[self.rng.next(len(busy))] if busy and self.rng.next_double() < 0.5 else opn[self.rng.next(len(opn))]
+            e = opn[self.rng.next(len(opn))]
             e.blocked = True
             m.recompute()
             if not m.connected():
@@ -1966,7 +1919,7 @@ class Sim:
                 return
         self._decide(z)
         if z.target >= 0 and z.target != z.node:
-            hop = int(self.map.znext[z.node, z.target])
+            hop = int(self.map.next[z.node, z.target])
             if hop >= 0:
                 z.next_node, z.progress = hop, 0.0
             else:
@@ -1986,7 +1939,7 @@ class Sim:
             return
         if z.mode != "wander" or z.target < 0 or z.target == z.node:
             z.mode = "wander"
-            cand = [n for n in m.nodes if not n.safe and 6 <= m.zdist[z.node, n.id] <= 18] or \
+            cand = [n for n in m.nodes if not n.safe and 6 <= m.dist[z.node, n.id] <= 18] or \
                    [n for n in m.nodes if not n.safe and n.id != z.node]
             z.target = cand[z.rng.next(len(cand))].id if cand else -1
 
@@ -2008,7 +1961,7 @@ class Sim:
             path.append(z.next_node)
             frm = z.next_node
         if z.target >= 0 and z.target != frm:
-            path += self.map.zpath(frm, z.target) or []
+            path += self.map.path(frm, z.target) or []
         return path[:max_len]
 
     def _prey(self, z):
@@ -2171,7 +2124,7 @@ class Sim:
             nodes=[dict(id=n.id, type=n.type, x=n.pos[0], y=n.pos[1], infection=n.infection, medkits=n.medkits, weapons=n.weapons, safe=n.safe,
                         powered=self.powered(n), district=n.district) for n in m.nodes],
             edges=[dict(id=e.id, a=e.a, b=e.b, length=e.length, blocked=e.blocked, bridge=e.bridge,
-                        blocked_until=e.blocked_until if e.blocked else 0, kind=("road", "highway", "mud")[e.kind]) for e in m.edges],
+                        blocked_until=e.blocked_until if e.blocked else 0) for e in m.edges],
             tasks=[dict(id=t.id, type=t.type, origin=t.origin, dest=t.dest, weight=t.weight, reward=t.reward, bonus=t.bonus,
                         urgent=t.urgent, deadline=t.deadline, expires_at=t.expires_at, status=t.status, carrier=t.carrier,
                         batch=t.batch, available_at=t.available_at) for t in self.tasks if t.status in live],
@@ -2229,7 +2182,7 @@ def classmate_policy():
             return [s for t in st.my_cargo() for s in (goto(t["dest"]), dropoff(t["id"]))]
         for inc in sorted(st.active_incidents(), key=lambda i: g.dist(st.here, i["node"])):
             eta = g.dist(st.here, inc["node"]) / me["speed"]
-            if eta < 25 and eta + 3 < inc["deadline"] - st.time and st.helpers(inc["id"]) < inc["min_people"]:
+            if (eta < 25 or inc["type"] == "generator") and eta + 3 < inc["deadline"] - st.time and st.helpers(inc["id"]) < inc["min_people"]:
                 return [goto(inc["node"]), fix(inc["id"], 20)]
         claimed = st.claimed_tasks()
         tasks = [t for t in st.open_tasks() if t["id"] not in claimed]

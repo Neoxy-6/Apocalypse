@@ -394,10 +394,10 @@ namespace Apocalypse
             roadblockTimer = cfg.roadblockInterval / (1f + 0.15f * Phase);
             UseStream(StreamBlock, roadblockIndex++);
             var open = map.edges.Where(e => !e.blocked && !e.bridge).ToList();
-            var busy = open.Where(e => e.kind == 1).ToList();
+            if (open.Count == 0) return;
             for (int tries = 0; tries < 5; tries++)
             {
-                var e = busy.Count > 0 && rng.NextDouble() < 0.5 ? busy[rng.Next(busy.Count)] : open[rng.Next(open.Count)];
+                var e = open[rng.Next(open.Count)];
                 e.blocked = true;
                 map.Recompute();
                 if (!map.Connected()) { e.blocked = false; map.Recompute(); continue; }
@@ -1611,7 +1611,7 @@ namespace Apocalypse
             DecideZombie(z);
             if (z.target >= 0 && z.target != z.node)
             {
-                int hop = map.znext[z.node, z.target];
+                int hop = map.next[z.node, z.target];
                 if (hop >= 0) { z.nextNode = hop; z.progress = 0; }
                 else z.target = -1;
             }
@@ -1634,7 +1634,7 @@ namespace Apocalypse
             if (z.mode != ZombieMode.Wander || z.target < 0 || z.target == z.node)
             {
                 z.mode = ZombieMode.Wander;
-                var near = map.nodes.Where(n => !n.Safe && map.zdist[z.node, n.id] >= 6f && map.zdist[z.node, n.id] <= 18f).ToList();
+                var near = map.nodes.Where(n => !n.Safe && map.dist[z.node, n.id] >= 6f && map.dist[z.node, n.id] <= 18f).ToList();
                 if (near.Count == 0) near = map.nodes.Where(n => !n.Safe && n.id != z.node).ToList();
                 z.target = near.Count > 0 ? near[z.rng.Next(near.Count)].id : -1;
             }
@@ -1647,7 +1647,7 @@ namespace Apocalypse
             if (z.nextNode >= 0) { path.Add(z.nextNode); from = z.nextNode; }
             if (z.target >= 0 && z.target != from)
             {
-                var rest = map.ZPath(from, z.target);
+                var rest = map.Path(from, z.target);
                 if (rest != null) path.AddRange(rest);
             }
             if (path.Count > maxLen) path.RemoveRange(maxLen, path.Count - maxLen);

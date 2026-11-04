@@ -8,7 +8,7 @@ namespace Apocalypse
 {
 
     [Serializable] public class NodeDto { public int id; public string type; public float x, y, infection; public int medkits, weapons; public bool safe, powered; public string district; }
-    [Serializable] public class EdgeDto { public int id, a, b; public float length; public bool blocked, bridge; public float blocked_until; public string kind; }
+    [Serializable] public class EdgeDto { public int id, a, b; public float length; public bool blocked, bridge; public float blocked_until; }
     [Serializable] public class TaskDto { public int id; public string type; public int origin, dest, weight, reward, bonus, batch; public bool urgent; public float deadline, expires_at, available_at; public string status; public int carrier; }
     [Serializable] public class BatchDto { public int id, origin, owner, bonus, delivered; public float deadline; public bool paid, failed; public int[] tasks; }
     [Serializable] public class PlayerDto { public int id; public string name, color, state, bot; public int node, next_node, score, load, delivered, rescued, downs; public float progress, x, y, hp, infection, downed_timer, city_reduced; public string role; public int[] targets; public int parts; public bool escaped; public int[] fixing; public int @fixed, fuel, combo, ammo, kills; }
@@ -226,7 +226,7 @@ namespace Apocalypse
                 edges = sim.map.edges.Select(e => new EdgeDto
                 {
                     id = e.id, a = e.a, b = e.b, length = e.length, blocked = e.blocked, bridge = e.bridge,
-                    blocked_until = e.blocked ? e.blockedUntil : 0, kind = e.kind == 1 ? "highway" : e.kind == 2 ? "mud" : "road",
+                    blocked_until = e.blocked ? e.blockedUntil : 0,
                 }).ToArray(),
                 tasks = sim.tasks.Where(t => t.status == TaskStatus.Announced || t.status == TaskStatus.Open || t.status == TaskStatus.Carried).Select(t => new TaskDto
                 {
