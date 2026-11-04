@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from apocalypse_sdk import CityGraph, State, dropoff, fix, goto, heal, pickup, revive, use_medkit
+from apocalypse_sdk import CityGraph, State, drop, dropoff, fix, goto, heal, pickup, revive, use_medkit
 
 def make_policy():
     def policy(st: State):
         me = st.you
-        g = CityGraph(st)
+        g = CityGraph(st, zombie_penalty=3, zombie_lookahead=10)
 
         ex, depart = st.extraction, st.escape.get("depart_at", -1)
         if depart > 0 and depart - st.time < g.dist(st.here, ex) / me["speed"] + 15:
@@ -21,6 +21,11 @@ def make_policy():
             if me["medkits"] > 0:
                 return [use_medkit()]
             return [goto(g.nearest(st.here, st.nodes_of("hospital"))), heal()]
+        e = st.escape
+        useless = [t for t in st.my_cargo() if (t["type"] == "part" and e["ready_at"] >= 0)
+                   or (t["type"] == "fuel" and e["fuel"] >= e["fuel_required"])]
+        if useless:
+            return [drop(t["id"]) for t in useless]
         if st.time < me["next_plan_at"]:
             return None
 
@@ -45,7 +50,7 @@ def make_policy():
         tasks = [t for t in st.open_tasks() if t["id"] not in claimed]
 
         if st.escape.get("ready_at", -1) >= 0:
-            fuel = [t for t in tasks if t["type"] == "fuel"]
+            fuel = [t for t in tasks if t["type"] == "fuel"] if st.escape["fuel"] < st.escape["fuel_required"] else []
             if not fuel:
                 return None if st.here == ex else [goto(ex)]
             tasks = fuel

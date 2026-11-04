@@ -24,9 +24,13 @@ namespace Apocalypse
             return new List<PlanStep> { Goto(hospital.id), Act("heal") };
         }
 
+        public static bool Useless(GameSim sim, GameTask t) =>
+            sim.cfg.escape && ((t.type == TaskType.Part && sim.readyAt >= 0) || (t.type == TaskType.Fuel && sim.fuel >= sim.fuelRequired));
+
         public static List<PlanStep> DeliverCargo(GameSim sim, Player p)
         {
-            var steps = new List<PlanStep>();
+            var steps = p.cargo.Select(sim.TaskById).Where(t => t != null && Useless(sim, t)).Select(t => Act("drop", t.id)).ToList();
+            if (steps.Count > 0) return steps;
             foreach (var t in p.cargo.Select(sim.TaskById).Where(t => t != null).OrderBy(t => sim.map.dist[p.node, t.dest]))
             {
                 steps.Add(Goto(t.dest));
@@ -73,7 +77,7 @@ namespace Apocalypse
             var taken = TeammateTargets(p);
             return sim.tasks.Where(t => t.status == TaskStatus.Open && sim.CanTake(p, t) && !taken.Contains(t.id)
                                         && sim.Load(p) + t.weight <= sim.cfg.capacity
-                                        && (sim.readyAt < 0 || t.type == TaskType.Fuel)).ToList();
+                                        && (sim.readyAt < 0 || t.type == TaskType.Fuel) && !Useless(sim, t)).ToList();
         }
 
         public static List<PlanStep> Idle(GameSim sim, Player p) =>
@@ -196,6 +200,18 @@ namespace Apocalypse
                 }
             }
 
+            if (p.ammo == 0 && sim.Phase >= 1 && sim.players.Count(q => q.ammo > 0) < 3 && sim.Load(p) + pre.Count / 2 + sim.cfg.weaponWeight <= sim.cfg.capacity - 2)
+            {
+                var arm = map.nodes.Where(n => n.type == NodeType.Armory && n.weapons > 0 && sim.InZone(n.pos))
+                    .OrderBy(n => map.dist[from, n.id]).FirstOrDefault();
+                if (arm != null && map.dist[from, arm.id] < 30f)
+                {
+                    pre.Add(BotUtil.Goto(arm.id));
+                    pre.Add(BotUtil.Act("take_weapon"));
+                    from = arm.id;
+                }
+            }
+
             float fear = p.hp < 60f ? 0.35f : 0.18f;
             float Danger(int node) => 1f / (1f + fear * sim.zombies.Count(z => Vector2.Distance(z.pos, map.nodes[node].pos) < 3f)
                                                + 0.5f * map.nodes[node].infection);
@@ -226,4 +242,4 @@ namespace Apocalypse
             return pre;
         }
     }
-}
+}
