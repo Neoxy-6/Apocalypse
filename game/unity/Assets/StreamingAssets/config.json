@@ -25,7 +25,7 @@
   "downedTime": 15,
   "respawnPenalty": 50,
   "survivalBonus": 120,
-  "zombieDamage": 3.5,
+  "zombieDamage": 5.5,
   "cityRate": 0.55,
   "spreadAmount": 0.15,
   "coop": true,
