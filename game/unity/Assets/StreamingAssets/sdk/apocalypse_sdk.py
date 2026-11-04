@@ -8,7 +8,7 @@ from typing import Callable, Iterable
 import requests
 
 __all__ = [
-    "Game", "State", "CityGraph", "ApiError", "benchmark", "test_local", "play", "draw", "replay",
+    "Game", "State", "CityGraph", "ApiError", "benchmark", "test_local", "play", "draw", "replay", "replay_match",
     "move", "goto", "pickup", "dropoff", "take_medkit", "use_medkit", "heal", "revive", "wait", "fix",
     "take_weapon", "drop", "drop_medkit", "drop_weapon",
 ]
@@ -310,7 +310,7 @@ def test_local(make_policy: Callable[[], Callable], seeds=(1, 2, 3), name: str =
         if g.sim.cfg["escape"]:
             t = int(g.sim.cfg["matchDuration"] - r["ended_at"])
             city = (f"✅ 直升機在比賽還剩 {t // 60}:{t % 60:02d} 時起飛，{r['escaped_count']}/{r['players']} 人逃出" if r["class_won"]
-                    else f"❌ 直升機沒修好（零件 {r['parts_total']}/{r['parts_required']}）")
+                    else f"❌ {g.sim.end_reason}")
             mine = f"運零件 {r['parts']}、救援 {r['rescued']}　倒地 {r['downs']} 次　{'搭上直升機' if r['escaped'] else '沒搭上'}"
         else:
             city = "✅ 全班撐過了" if r["class_won"] else f"❌ 城市在 {int(r['ended_at']) // 60}:{int(r['ended_at']) % 60:02d} 淪陷"
