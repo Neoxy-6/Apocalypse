@@ -12,6 +12,7 @@ namespace Apocalypse
         float gallerySize = 3f;
         bool galleryMode;
         bool galleryNoFade;
+        Vector2? galleryFocus;
 
         IEnumerator Gallery(string dir)
         {
@@ -29,11 +30,12 @@ namespace Apocalypse
             Node Empty() => roads.OrderByDescending(n => Sim.players.Select(q => q.pos).Concat(Sim.zombies.Select(q => q.pos)).Append(map.nodes[Sim.extraction].pos)
                                                               .Min(q => Vector2.Distance(n.pos, q))).First();
 
-            IEnumerator Shot(string name, Vector2 at, float size, float wait = 2.2f)
+            IEnumerator Shot(string name, Vector2 at, float size, float wait = 2.2f, Vector2? focus = null)
             {
-                galleryTarget = at; gallerySize = size;
+                galleryTarget = at; gallerySize = size; galleryFocus = focus;
                 yield return new WaitForSecondsRealtime(wait);
                 GameManager.CaptureTo(Path.Combine(dir, name + ".png"));
+                galleryFocus = null;
                 yield return null;
             }
 
@@ -65,26 +67,31 @@ namespace Apocalypse
             yield return Shot("fuel", PileBase(fuelNode.id) + new Vector2(0.5f, 0), 2f);
             Sim.tasks.RemoveAll(t => t.id == 99999);
 
+            Vector2 Lift(Vector2 p, float h) =>
+                p + new Vector2(Mathf.Sin(Yaw * Mathf.Deg2Rad), Mathf.Cos(Yaw * Mathf.Deg2Rad)) * (h / Mathf.Tan(Pitch * Mathf.Deg2Rad));
+            var facilities = map.nodes.Where(x => x.type != NodeType.Road).ToList();
+            Node Lonely(NodeType type) => map.nodes.Where(x => x.type == type)
+                .OrderByDescending(x => facilities.Where(o => o != x).Select(o => Vector2.Distance(FacilityPos(o.id), FacilityPos(x.id))).DefaultIfEmpty(99f).Min())
+                .FirstOrDefault();
+
             galleryNoFade = true;
-            yield return Shot("extraction", FacilityPos(Sim.extraction), 4.2f);
-            yield return Shot("guard", FacilityPos(Sim.extraction) + new Vector2(1.4f, 1.4f), 2.2f);
-            foreach (var (name, type) in new[] { ("hospital", NodeType.Hospital), ("supply", NodeType.Supply), ("factory", NodeType.Factory) })
+            yield return Shot("extraction", Lift(FacilityPos(Sim.extraction), 1f), 4.2f);
+            yield return Shot("guard", Lift(guardTower, 1.4f), 2.4f, 2.2f, guardTower);
+            foreach (var (name, type) in new[] { ("hospital", NodeType.Hospital), ("supply", NodeType.Supply), ("factory", NodeType.Factory), ("armory", NodeType.Armory) })
             {
-                var n = map.nodes.FirstOrDefault(x => x.type == type);
-                if (n != null) yield return Shot(name, FacilityPos(n.id), 2.8f);
+                var n = Lonely(type);
+                if (n != null) yield return Shot(name, Lift(FacilityPos(n.id), 1.8f), 3.4f, 2.2f, FacilityPos(n.id));
             }
-            var gen = Sim.Generators.FirstOrDefault();
+            var gen = Lonely(NodeType.Generator);
             if (gen != null)
             {
                 gen.powered = false;
-                yield return Shot("generator_broken", FacilityPos(gen.id), 2.4f);
+                yield return Shot("generator_broken", Lift(FacilityPos(gen.id), 1.8f), 3.4f, 2.2f, FacilityPos(gen.id));
                 foreach (var g in Sim.Generators) g.powered = true;
-                yield return Shot("generator_on", FacilityPos(gen.id), 2.4f, 3f);
-                var f = map.nodes.FirstOrDefault(x => x.type == NodeType.Factory);
-                if (f != null) yield return Shot("factory_on", FacilityPos(f.id), 2.8f, 3f);
+                yield return Shot("generator_on", Lift(FacilityPos(gen.id), 1.8f), 3.4f, 3f, FacilityPos(gen.id));
+                var f = Lonely(NodeType.Factory);
+                if (f != null) yield return Shot("factory_on", Lift(FacilityPos(f.id), 1.8f), 3.4f, 3f, FacilityPos(f.id));
             }
-            var arm = map.nodes.FirstOrDefault(x => x.type == NodeType.Armory);
-            if (arm != null) yield return Shot("armory", FacilityPos(arm.id) + new Vector2(0.6f, 0.6f), 3.2f);
 
             galleryNoFade = false;
             Sim.incidents.Clear();
@@ -97,7 +104,7 @@ namespace Apocalypse
                 if (inc == null) continue;
                 yield return null;
                 var at = incidentFx.TryGetValue(inc.id, out var fx) ? fx.pos : map.nodes[inc.node].pos;
-                yield return Shot("incident_" + kind, (at + map.nodes[inc.node].pos) / 2f, 3f, 2.8f);
+                yield return Shot("incident_" + kind, Lift((at + map.nodes[inc.node].pos) / 2f, 0.6f), 3f, 2.8f);
                 Sim.incidents.Remove(inc);
                 yield return null;
             }

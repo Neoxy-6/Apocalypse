@@ -67,7 +67,15 @@ namespace Apocalypse
             bool close = !galleryNoFade && cam.orthographicSize < 8.5f;
             occlusionTargets.Clear();
             var back = -cam.transform.forward;
-            if (close)
+            if (galleryFocus.HasValue)
+            {
+                close = true;
+                var f = galleryFocus.Value;
+                for (int i = 0; i < 6; i++)
+                    for (float h = 0.3f; h <= 2.4f; h += 0.7f)
+                        occlusionTargets.Add(W(f + new Vector2(Mathf.Cos(i * 1.05f), Mathf.Sin(i * 1.05f)) * 0.9f, h));
+            }
+            else if (close)
             {
 
                 var fwd = cam.transform.forward;
@@ -86,7 +94,7 @@ namespace Apocalypse
             }
             foreach (var g in occGroups)
             {
-                if (close)
+                if (close && !(galleryFocus.HasValue && Vector2.Distance(g.xz, galleryFocus.Value) < 1.6f))
                     foreach (var tp in occlusionTargets)
                     {
                         float dx = g.xz.x - tp.x, dz = g.xz.y - tp.z;
