@@ -141,11 +141,50 @@ namespace Apocalypse
         public float TimeLeft => Mathf.Max(0f, cfg.matchDuration - (ClockStopped ? departAt - cfg.boardTime : time));
         public bool ClockStopped => cfg.escape && departAt >= 0;
 
+        public string mapJson = "";
+
+        static MapData LoadMapFile(string file, out string json)
+        {
+            json = "";
+            if (string.IsNullOrEmpty(file)) return null;
+            var tried = new List<string> { System.IO.Path.GetFullPath(file) };
+            if (!System.IO.Path.IsPathRooted(file))
+            {
+                tried.Add(System.IO.Path.Combine(Application.streamingAssetsPath, "maps", file));
+                tried.Add(System.IO.Path.Combine(Application.streamingAssetsPath, "maps", System.IO.Path.GetFileName(file)));
+                string project = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "..", "Assets", "StreamingAssets", "maps"));
+                tried.Add(System.IO.Path.Combine(project, file));
+                tried.Add(System.IO.Path.Combine(project, System.IO.Path.GetFileName(file)));
+            }
+            string path = tried.FirstOrDefault(System.IO.File.Exists);
+            if (path == null)
+            {
+                Debug.LogWarning($"[Apocalypse] 找不到地圖 {file}，找過：{string.Join("、", tried.Distinct())}，改用隨機地圖");
+                return null;
+            }
+            try
+            {
+                json = System.IO.File.ReadAllText(path);
+                if (json.Length > 0 && json[0] == '﻿') json = json.Substring(1);
+                Debug.Log($"[Apocalypse] 使用自訂地圖：{path}");
+                var data = JsonUtility.FromJson<MapData>(json);
+                string err = CityMap.Validate(data);
+                if (err == null) return data;
+                Debug.LogWarning($"[Apocalypse] 地圖 {file} 不能用：{err}，改用隨機地圖");
+            }
+            catch (Exception e) { Debug.LogWarning($"[Apocalypse] 讀不到地圖 {file}：{e.Message}，改用隨機地圖"); }
+            json = "";
+            return null;
+        }
+
         public void ResetWorld()
         {
             rng = new System.Random(cfg.seed);
             map = new CityMap(cfg.mapCols, cfg.mapRows, cfg.bridges);
-            map.Generate(rng);
+            mapJson = "";
+            var custom = LoadMapFile(cfg.mapFile, out mapJson);
+            if (custom != null) map.LoadCustom(custom);
+            else map.Generate(rng);
             mapVersion++;
             status = MatchStatus.Lobby;
             time = 0; cityInfection = 0; endReason = ""; classWon = false;
@@ -155,7 +194,10 @@ namespace Apocalypse
                     if (n.type == NodeType.Shelter && n.id != map.startNode) n.type = NodeType.Road;
             extraction = map.startNode;
             var drng = new System.Random(unchecked(cfg.seed * 7919 + 17));
-            int west = drng.Next(4), east = drng.Next(4);
+            int west, east;
+            int[] chosen = map.themes != null && map.themes.Length == 2 ? map.themes.Select(t => Array.IndexOf(Districts, t)).ToArray() : null;
+            if (chosen != null && chosen.All(i => i >= 0)) { west = chosen[0]; east = chosen[1]; }
+            else { west = drng.Next(4); east = drng.Next(4); }
             foreach (var n in map.nodes) n.district = map.West(n.id) ? west : east;
             foreach (var n in map.nodes) if (n.type == NodeType.Armory) n.weapons = cfg.weaponStock;
             var ex = map.nodes[extraction].pos;
@@ -349,7 +391,12 @@ namespace Apocalypse
             UseStream(StreamEvent, 100000);
             int n = Mathf.Max(1, players.Count);
             fuelRequired = Mathf.Max(2, Mathf.RoundToInt(n * cfg.fuelPerPlayer) - fuelDiscount);
-            int Ring(Node nd) { int r = nd.id / map.cols, c = nd.id % map.cols; return Mathf.Min(Mathf.Min(r, map.rows - 1 - r), Mathf.Min(c, map.cols - 1 - c)); }
+            int Ring(Node nd)
+            {
+                if (map.custom) return (int)(Mathf.Min(Mathf.Min(nd.pos.x, map.Size.x - nd.pos.x), Mathf.Min(nd.pos.y, map.Size.y - nd.pos.y)) / map.spacing);
+                int r = nd.id / map.cols, c = nd.id % map.cols;
+                return Mathf.Min(Mathf.Min(r, map.rows - 1 - r), Mathf.Min(c, map.cols - 1 - c));
+            }
             var pool = map.nodes.Where(nd => nd.type == NodeType.Road && map.dist[extraction, nd.id] >= 6f && InZone(nd.pos)).ToList();
             if (pool.Count == 0) pool = map.nodes.Where(nd => nd.type == NodeType.Road && map.dist[extraction, nd.id] >= 6f).ToList();
             if (pool.Count == 0) pool = map.nodes.Where(nd => nd.type == NodeType.Road).ToList();

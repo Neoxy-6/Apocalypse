@@ -4,6 +4,7 @@
   "mapCols": 10,
   "mapRows": 8,
   "bridges": 2,
+  "mapFile": "",
   "batchChance": 0.6,
   "batchBonusRatio": 1.0,
   "taskInterval": 9,

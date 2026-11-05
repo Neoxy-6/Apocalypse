@@ -256,6 +256,10 @@ namespace Apocalypse
                         : "{\"ok\":true,\"header\":" + replayHeader + ",\"frames\":[" + string.Join(",", replayFrames) + "]}";
                     return;
 
+                case "GET /map":
+                    req.response = string.IsNullOrEmpty(sim.mapJson) ? "{\"ok\":false,\"error\":\"這場用的是隨機地圖\"}" : sim.mapJson;
+                    return;
+
                 case "GET /results":
                     req.response = string.IsNullOrEmpty(sim.lastResultJson) ? "{\"ok\":false,\"error\":\"尚無結果\"}" : sim.lastResultJson;
                     return;

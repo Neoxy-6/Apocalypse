@@ -10,6 +10,11 @@ namespace Apocalypse
     public enum PlayerState { Active, Downed, Eliminated }
     public enum MatchStatus { Lobby, Running, Ended }
 
+    [System.Serializable] public class MapNodeData { public float x, y; public string type = "road"; public bool infected; }
+    [System.Serializable] public class MapEdgeData { public int a, b; public bool bridge; }
+    [System.Serializable] public class MapPoint { public float x, y; }
+    [System.Serializable] public class MapData { public string name = ""; public MapNodeData[] nodes; public MapEdgeData[] edges; public MapPoint[] river; public string[] themes; }
+
     public class Node
     {
         public int id;

@@ -1,0 +1,911 @@
+{
+ "name": "範例：種子 13",
+ "nodes": [
+  {
+   "x": 0.06,
+   "y": 0.28,
+   "type": "road"
+  },
+  {
+   "x": 6.78,
+   "y": 0.7,
+   "type": "road"
+  },
+  {
+   "x": 13.79,
+   "y": -0.9,
+   "type": "factory"
+  },
+  {
+   "x": 20.35,
+   "y": -0.48,
+   "type": "generator"
+  },
+  {
+   "x": 24.29,
+   "y": 1.11,
+   "type": "road"
+  },
+  {
+   "x": 30.1,
+   "y": 1.29,
+   "type": "road"
+  },
+  {
+   "x": 32.93,
+   "y": 1.3,
+   "type": "road"
+  },
+  {
+   "x": 41.62,
+   "y": 2.13,
+   "type": "factory"
+  },
+  {
+   "x": 47.94,
+   "y": 1.76,
+   "type": "road"
+  },
+  {
+   "x": 54.84,
+   "y": 1.63,
+   "type": "road",
+   "infected": true
+  },
+  {
+   "x": 1.35,
+   "y": 7.71,
+   "type": "supply"
+  },
+  {
+   "x": 7.6,
+   "y": 5.07,
+   "type": "road"
+  },
+  {
+   "x": 12.17,
+   "y": 6.62,
+   "type": "road"
+  },
+  {
+   "x": 18.4,
+   "y": 4.46,
+   "type": "road"
+  },
+  {
+   "x": 23.17,
+   "y": 6.17,
+   "type": "road"
+  },
+  {
+   "x": 28.7,
+   "y": 5.3,
+   "type": "road"
+  },
+  {
+   "x": 33.86,
+   "y": 7.23,
+   "type": "supply"
+  },
+  {
+   "x": 41.55,
+   "y": 6.19,
+   "type": "road"
+  },
+  {
+   "x": 47.57,
+   "y": 6.69,
+   "type": "road"
+  },
+  {
+   "x": 55.17,
+   "y": 7.31,
+   "type": "road"
+  },
+  {
+   "x": 0.44,
+   "y": 12.5,
+   "type": "supply"
+  },
+  {
+   "x": 6.73,
+   "y": 11.35,
+   "type": "road"
+  },
+  {
+   "x": 13.26,
+   "y": 11.22,
+   "type": "hospital"
+  },
+  {
+   "x": 19.51,
+   "y": 10.59,
+   "type": "road"
+  },
+  {
+   "x": 23.88,
+   "y": 11.51,
+   "type": "road"
+  },
+  {
+   "x": 29.72,
+   "y": 11.34,
+   "type": "road"
+  },
+  {
+   "x": 34.74,
+   "y": 11.27,
+   "type": "factory"
+  },
+  {
+   "x": 40.6,
+   "y": 11.44,
+   "type": "armory"
+  },
+  {
+   "x": 47.17,
+   "y": 11.42,
+   "type": "road"
+  },
+  {
+   "x": 54.17,
+   "y": 11.88,
+   "type": "generator"
+  },
+  {
+   "x": 1.08,
+   "y": 18.59,
+   "type": "road"
+  },
+  {
+   "x": 7.59,
+   "y": 18.3,
+   "type": "road"
+  },
+  {
+   "x": 13.04,
+   "y": 18.04,
+   "type": "road"
+  },
+  {
+   "x": 17.45,
+   "y": 16.39,
+   "type": "road"
+  },
+  {
+   "x": 23.04,
+   "y": 16.7,
+   "type": "road"
+  },
+  {
+   "x": 29.82,
+   "y": 17.48,
+   "type": "road"
+  },
+  {
+   "x": 33.84,
+   "y": 16.53,
+   "type": "extraction"
+  },
+  {
+   "x": 39.35,
+   "y": 15.78,
+   "type": "road"
+  },
+  {
+   "x": 47.08,
+   "y": 16.22,
+   "type": "road"
+  },
+  {
+   "x": 52.93,
+   "y": 16.16,
+   "type": "road"
+  },
+  {
+   "x": 0.61,
+   "y": 24.07,
+   "type": "road"
+  },
+  {
+   "x": 7.3,
+   "y": 23.16,
+   "type": "road"
+  },
+  {
+   "x": 13.06,
+   "y": 24.09,
+   "type": "road"
+  },
+  {
+   "x": 17.06,
+   "y": 22.36,
+   "type": "road"
+  },
+  {
+   "x": 22.86,
+   "y": 23.02,
+   "type": "road"
+  },
+  {
+   "x": 29.98,
+   "y": 24.4,
+   "type": "road"
+  },
+  {
+   "x": 36.01,
+   "y": 22.47,
+   "type": "road"
+  },
+  {
+   "x": 41.36,
+   "y": 23.56,
+   "type": "road"
+  },
+  {
+   "x": 47.73,
+   "y": 23.47,
+   "type": "hospital"
+  },
+  {
+   "x": 53.01,
+   "y": 23.57,
+   "type": "road"
+  },
+  {
+   "x": 0.36,
+   "y": 28.5,
+   "type": "road"
+  },
+  {
+   "x": 5.35,
+   "y": 29.99,
+   "type": "road"
+  },
+  {
+   "x": 12.08,
+   "y": 30.27,
+   "type": "road"
+  },
+  {
+   "x": 16.09,
+   "y": 29.26,
+   "type": "road"
+  },
+  {
+   "x": 23.29,
+   "y": 29.38,
+   "type": "road"
+  },
+  {
+   "x": 31.02,
+   "y": 31.23,
+   "type": "road"
+  },
+  {
+   "x": 36.04,
+   "y": 31.79,
+   "type": "road"
+  },
+  {
+   "x": 42.25,
+   "y": 30.38,
+   "type": "road"
+  },
+  {
+   "x": 47.82,
+   "y": 29.75,
+   "type": "road"
+  },
+  {
+   "x": 53.05,
+   "y": 30.63,
+   "type": "road"
+  },
+  {
+   "x": 0.5,
+   "y": 34.76,
+   "type": "road"
+  },
+  {
+   "x": 5.01,
+   "y": 35.48,
+   "type": "road"
+  },
+  {
+   "x": 11.84,
+   "y": 34.47,
+   "type": "road"
+  },
+  {
+   "x": 15.82,
+   "y": 36.2,
+   "type": "road"
+  },
+  {
+   "x": 22.76,
+   "y": 36.76,
+   "type": "road"
+  },
+  {
+   "x": 31.1,
+   "y": 38.51,
+   "type": "road"
+  },
+  {
+   "x": 37.31,
+   "y": 38.18,
+   "type": "road"
+  },
+  {
+   "x": 42.61,
+   "y": 38.25,
+   "type": "road"
+  },
+  {
+   "x": 47.69,
+   "y": 38.12,
+   "type": "road"
+  },
+  {
+   "x": 52.38,
+   "y": 38.28,
+   "type": "road"
+  },
+  {
+   "x": 1.58,
+   "y": 42.08,
+   "type": "road",
+   "infected": true
+  },
+  {
+   "x": 6.93,
+   "y": 42.44,
+   "type": "road"
+  },
+  {
+   "x": 11.73,
+   "y": 42.41,
+   "type": "road"
+  },
+  {
+   "x": 17.76,
+   "y": 42.58,
+   "type": "road"
+  },
+  {
+   "x": 23.59,
+   "y": 41.48,
+   "type": "road"
+  },
+  {
+   "x": 31.15,
+   "y": 42.82,
+   "type": "factory"
+  },
+  {
+   "x": 37.87,
+   "y": 43.78,
+   "type": "road"
+  },
+  {
+   "x": 41.7,
+   "y": 42.42,
+   "type": "factory"
+  },
+  {
+   "x": 47.19,
+   "y": 41.94,
+   "type": "road"
+  },
+  {
+   "x": 52.25,
+   "y": 42.73,
+   "type": "road"
+  }
+ ],
+ "edges": [
+  {
+   "a": 0,
+   "b": 1,
+   "bridge": false
+  },
+  {
+   "a": 0,
+   "b": 10,
+   "bridge": false
+  },
+  {
+   "a": 1,
+   "b": 11,
+   "bridge": false
+  },
+  {
+   "a": 2,
+   "b": 3,
+   "bridge": false
+  },
+  {
+   "a": 2,
+   "b": 12,
+   "bridge": false
+  },
+  {
+   "a": 3,
+   "b": 13,
+   "bridge": false
+  },
+  {
+   "a": 4,
+   "b": 5,
+   "bridge": false
+  },
+  {
+   "a": 4,
+   "b": 14,
+   "bridge": false
+  },
+  {
+   "a": 5,
+   "b": 6,
+   "bridge": false
+  },
+  {
+   "a": 5,
+   "b": 15,
+   "bridge": false
+  },
+  {
+   "a": 6,
+   "b": 7,
+   "bridge": false
+  },
+  {
+   "a": 8,
+   "b": 9,
+   "bridge": false
+  },
+  {
+   "a": 8,
+   "b": 18,
+   "bridge": false
+  },
+  {
+   "a": 9,
+   "b": 19,
+   "bridge": false
+  },
+  {
+   "a": 10,
+   "b": 20,
+   "bridge": false
+  },
+  {
+   "a": 11,
+   "b": 21,
+   "bridge": false
+  },
+  {
+   "a": 12,
+   "b": 13,
+   "bridge": false
+  },
+  {
+   "a": 13,
+   "b": 14,
+   "bridge": false
+  },
+  {
+   "a": 13,
+   "b": 23,
+   "bridge": false
+  },
+  {
+   "a": 15,
+   "b": 16,
+   "bridge": true
+  },
+  {
+   "a": 16,
+   "b": 17,
+   "bridge": false
+  },
+  {
+   "a": 16,
+   "b": 26,
+   "bridge": false
+  },
+  {
+   "a": 17,
+   "b": 27,
+   "bridge": false
+  },
+  {
+   "a": 18,
+   "b": 19,
+   "bridge": false
+  },
+  {
+   "a": 18,
+   "b": 28,
+   "bridge": false
+  },
+  {
+   "a": 20,
+   "b": 21,
+   "bridge": false
+  },
+  {
+   "a": 20,
+   "b": 30,
+   "bridge": false
+  },
+  {
+   "a": 22,
+   "b": 23,
+   "bridge": false
+  },
+  {
+   "a": 22,
+   "b": 32,
+   "bridge": false
+  },
+  {
+   "a": 23,
+   "b": 33,
+   "bridge": false
+  },
+  {
+   "a": 24,
+   "b": 25,
+   "bridge": false
+  },
+  {
+   "a": 24,
+   "b": 34,
+   "bridge": false
+  },
+  {
+   "a": 25,
+   "b": 35,
+   "bridge": false
+  },
+  {
+   "a": 26,
+   "b": 36,
+   "bridge": false
+  },
+  {
+   "a": 27,
+   "b": 37,
+   "bridge": false
+  },
+  {
+   "a": 28,
+   "b": 29,
+   "bridge": false
+  },
+  {
+   "a": 28,
+   "b": 38,
+   "bridge": false
+  },
+  {
+   "a": 29,
+   "b": 39,
+   "bridge": false
+  },
+  {
+   "a": 30,
+   "b": 40,
+   "bridge": false
+  },
+  {
+   "a": 31,
+   "b": 32,
+   "bridge": false
+  },
+  {
+   "a": 31,
+   "b": 41,
+   "bridge": false
+  },
+  {
+   "a": 32,
+   "b": 42,
+   "bridge": false
+  },
+  {
+   "a": 33,
+   "b": 43,
+   "bridge": false
+  },
+  {
+   "a": 34,
+   "b": 44,
+   "bridge": false
+  },
+  {
+   "a": 35,
+   "b": 45,
+   "bridge": false
+  },
+  {
+   "a": 36,
+   "b": 46,
+   "bridge": false
+  },
+  {
+   "a": 37,
+   "b": 38,
+   "bridge": false
+  },
+  {
+   "a": 39,
+   "b": 49,
+   "bridge": false
+  },
+  {
+   "a": 40,
+   "b": 41,
+   "bridge": false
+  },
+  {
+   "a": 40,
+   "b": 50,
+   "bridge": false
+  },
+  {
+   "a": 42,
+   "b": 52,
+   "bridge": false
+  },
+  {
+   "a": 43,
+   "b": 44,
+   "bridge": false
+  },
+  {
+   "a": 45,
+   "b": 55,
+   "bridge": false
+  },
+  {
+   "a": 46,
+   "b": 47,
+   "bridge": false
+  },
+  {
+   "a": 47,
+   "b": 57,
+   "bridge": false
+  },
+  {
+   "a": 48,
+   "b": 49,
+   "bridge": false
+  },
+  {
+   "a": 50,
+   "b": 60,
+   "bridge": false
+  },
+  {
+   "a": 51,
+   "b": 52,
+   "bridge": false
+  },
+  {
+   "a": 51,
+   "b": 61,
+   "bridge": false
+  },
+  {
+   "a": 52,
+   "b": 62,
+   "bridge": false
+  },
+  {
+   "a": 53,
+   "b": 54,
+   "bridge": false
+  },
+  {
+   "a": 53,
+   "b": 63,
+   "bridge": true
+  },
+  {
+   "a": 54,
+   "b": 55,
+   "bridge": false
+  },
+  {
+   "a": 56,
+   "b": 57,
+   "bridge": false
+  },
+  {
+   "a": 56,
+   "b": 66,
+   "bridge": false
+  },
+  {
+   "a": 58,
+   "b": 59,
+   "bridge": false
+  },
+  {
+   "a": 59,
+   "b": 69,
+   "bridge": false
+  },
+  {
+   "a": 60,
+   "b": 70,
+   "bridge": false
+  },
+  {
+   "a": 61,
+   "b": 71,
+   "bridge": false
+  },
+  {
+   "a": 62,
+   "b": 72,
+   "bridge": false
+  },
+  {
+   "a": 63,
+   "b": 64,
+   "bridge": false
+  },
+  {
+   "a": 63,
+   "b": 73,
+   "bridge": false
+  },
+  {
+   "a": 64,
+   "b": 74,
+   "bridge": false
+  },
+  {
+   "a": 65,
+   "b": 66,
+   "bridge": false
+  },
+  {
+   "a": 65,
+   "b": 75,
+   "bridge": false
+  },
+  {
+   "a": 66,
+   "b": 67,
+   "bridge": false
+  },
+  {
+   "a": 67,
+   "b": 77,
+   "bridge": false
+  },
+  {
+   "a": 68,
+   "b": 69,
+   "bridge": false
+  },
+  {
+   "a": 68,
+   "b": 78,
+   "bridge": false
+  },
+  {
+   "a": 69,
+   "b": 79,
+   "bridge": false
+  },
+  {
+   "a": 70,
+   "b": 71,
+   "bridge": false
+  },
+  {
+   "a": 71,
+   "b": 72,
+   "bridge": false
+  },
+  {
+   "a": 73,
+   "b": 74,
+   "bridge": false
+  },
+  {
+   "a": 75,
+   "b": 76,
+   "bridge": false
+  },
+  {
+   "a": 76,
+   "b": 77,
+   "bridge": false
+  },
+  {
+   "a": 78,
+   "b": 79,
+   "bridge": false
+  },
+  {
+   "a": 48,
+   "b": 59,
+   "bridge": false
+  },
+  {
+   "a": 49,
+   "b": 58,
+   "bridge": false
+  }
+ ],
+ "river": [
+  {
+   "x": 14.62,
+   "y": 44.73
+  },
+  {
+   "x": 14.04,
+   "y": 38.86
+  },
+  {
+   "x": 14.05,
+   "y": 32.77
+  },
+  {
+   "x": 20.24,
+   "y": 33.29
+  },
+  {
+   "x": 27.19,
+   "y": 33.7
+  },
+  {
+   "x": 34.15,
+   "y": 34.12
+  },
+  {
+   "x": 33.02,
+   "y": 27.0
+  },
+  {
+   "x": 31.88,
+   "y": 19.88
+  },
+  {
+   "x": 31.35,
+   "y": 13.86
+  },
+  {
+   "x": 31.42,
+   "y": 8.96
+  },
+  {
+   "x": 31.49,
+   "y": 4.06
+  },
+  {
+   "x": 37.37,
+   "y": 4.47
+  },
+  {
+   "x": 44.35,
+   "y": 4.51
+  },
+  {
+   "x": 44.68,
+   "y": -0.09
+  }
+ ],
+ "themes": [
+  "ruins",
+  "city"
+ ]
+}

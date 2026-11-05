@@ -13,6 +13,7 @@ namespace Apocalypse
         public int port = 8080;
         public string adminKey = "admin";
         public string publicUrl = "";
+        public string mapFile = "";
 
         public int mapCols = 10;
         public int mapRows = 8;
@@ -130,6 +131,7 @@ namespace Apocalypse
                 {
                     case "-port": int.TryParse(v, out cfg.port); break;
                     case "-seed": int.TryParse(v, out cfg.seed); break;
+                    case "-map": cfg.mapFile = v; break;
                     case "-duration": float.TryParse(v, out cfg.matchDuration); break;
                     case "-timescale": float.TryParse(v, out cfg.timeScale); break;
                     case "-adminkey": cfg.adminKey = v; break;

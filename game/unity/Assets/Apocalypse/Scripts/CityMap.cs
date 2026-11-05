@@ -38,7 +38,9 @@ namespace Apocalypse
 
         public List<Vector2> RiverLine()
         {
-            var pts = river.Select(d => new Vector2(d.x - 0.5f, d.y - 0.5f) * spacing + Warp(d.x - 0.5f, d.y - 0.5f)).ToList();
+            var pts = custom ? new List<Vector2>(riverPoints)
+                : river.Select(d => new Vector2(d.x - 0.5f, d.y - 0.5f) * spacing + Warp(d.x - 0.5f, d.y - 0.5f)).ToList();
+            if (pts.Count < 2) return new List<Vector2>();
             for (int k = 0; k < 3; k++)
             {
                 var sm = new List<Vector2> { pts[0] };
@@ -82,9 +84,88 @@ namespace Apocalypse
             return 0.5f;
         }
 
-        public int EastNode => nodes.First(n => !sideA[n.id]).id;
+        public int EastNode => nodes.FirstOrDefault(n => !sideA[n.id])?.id ?? 0;
 
-        public Vector2 Size => new Vector2((cols - 1) * spacing, (rows - 1) * spacing);
+        public Vector2 Size => custom ? customSize : new Vector2((cols - 1) * spacing, (rows - 1) * spacing);
+
+        public bool custom;
+        public string[] themes;
+        public readonly List<Vector2> riverPoints = new List<Vector2>();
+        Vector2 customSize;
+
+        static NodeType ParseType(string type)
+        {
+            switch (type)
+            {
+                case "extraction": return NodeType.Shelter;
+                case "hospital": return NodeType.Hospital;
+                case "supply": return NodeType.Supply;
+                case "factory": return NodeType.Factory;
+                case "generator": return NodeType.Generator;
+                case "armory": return NodeType.Armory;
+                default: return NodeType.Road;
+            }
+        }
+
+        public void LoadCustom(MapData data)
+        {
+            custom = true;
+            nodes.Clear(); edges.Clear(); river.Clear(); riverSet.Clear(); cuts.Clear(); riverPoints.Clear();
+            float minX = data.nodes.Min(d => d.x), minY = data.nodes.Min(d => d.y);
+            startNode = 0;
+            for (int i = 0; i < data.nodes.Length; i++)
+            {
+                var d = data.nodes[i];
+                var n = new Node { id = i, pos = new Vector2(d.x - minX, d.y - minY), type = ParseType(d.type) };
+                if (n.type == NodeType.Supply) n.medkits = 3;
+                if (d.type == "extraction") startNode = i;
+                nodes.Add(n);
+            }
+            customSize = new Vector2(nodes.Max(n => n.pos.x), nodes.Max(n => n.pos.y));
+            foreach (var e in data.edges ?? new MapEdgeData[0])
+                if (e.a != e.b && e.a >= 0 && e.b >= 0 && e.a < nodes.Count && e.b < nodes.Count) AddEdge(e.a, e.b, e.bridge);
+            foreach (var p in data.river ?? new MapPoint[0]) riverPoints.Add(new Vector2(p.x - minX, p.y - minY));
+            themes = data.themes;
+
+            sideA = new bool[nodes.Count];
+            var queue = new Queue<int>();
+            sideA[0] = true; queue.Enqueue(0);
+            while (queue.Count > 0)
+            {
+                int u = queue.Dequeue();
+                foreach (int id in nodes[u].edges)
+                {
+                    var e = edges[id];
+                    int v = e.Other(u);
+                    if (e.bridge || sideA[v]) continue;
+                    sideA[v] = true; queue.Enqueue(v);
+                }
+            }
+
+            var seeds = Enumerable.Range(0, nodes.Count).Where(i => data.nodes[i].infected).ToList();
+            if (seeds.Count == 0)
+                seeds = nodes.OrderByDescending(n => Vector2.Distance(n.pos, nodes[startNode].pos)).ThenBy(n => n.id).Take(2).Select(n => n.id).ToList();
+            foreach (int s in seeds)
+            {
+                nodes[s].infection = 1f;
+                foreach (int e in nodes[s].edges)
+                {
+                    var o = nodes[edges[e].Other(s)];
+                    if (o.infection < 0.5f) o.infection = 0.5f;
+                }
+            }
+            Recompute();
+        }
+
+        public static string Validate(MapData data)
+        {
+            if (data?.nodes == null || data.nodes.Length < 4) return "路口太少";
+            if (data.nodes.Count(n => n.type == "extraction") != 1) return "撤離點要剛好一個";
+            var m = new CityMap();
+            m.LoadCustom(data);
+            if (!m.Connected()) return "有路口走不到";
+            return null;
+        }
 
         public List<Node> nodes = new List<Node>();
         public List<Edge> edges = new List<Edge>();
@@ -331,6 +412,7 @@ namespace Apocalypse
                 }
             }
             return count == nodes.Count;
+            // not done yet
         }
 
         public bool Connected()
