@@ -145,6 +145,28 @@ namespace Apocalypse
 
             bool Free(Vector2 p, float road, float fac) => RoadClearance(p) >= road && occupied.All(o => Vector2.Distance(o, p) >= fac);
 
+            void Block(Vector2 center, int theme, System.Random rnd)
+            {
+                bool wholeBlock = Free(center, 2.2f, 3.4f);
+                switch (theme)
+                {
+                    case 0: JungleBlock(center, rnd, wholeBlock, Free); break;
+                    case 1: CityBlock(center, rnd, Free); break;
+                    case 2: RuinsBlock(center, rnd, Free); break;
+                    default: TownBlock(center, rnd, wholeBlock, Free); break;
+                }
+            }
+
+            if (map.custom)
+                for (float y = map.spacing / 2f; y < map.Size.y; y += map.spacing)
+                    for (float x = map.spacing / 2f; x < map.Size.x; x += map.spacing)
+                    {
+                        var center = new Vector2(x, y);
+                        if (riverLine.Count > 1 && CityMap.RiverDistance(riverLine, center) < 2.5f) continue;
+                        var near = map.nodes.OrderBy(n => (n.pos - center).sqrMagnitude).First();
+                        Block(center, near.district, new System.Random(gm.cfg.seed * 1009 + (int)(x * 7f) * 97 + (int)(y * 7f) * 13 + near.district));
+                    }
+            else
             for (int r = 0; r < map.rows - 1; r++)
                 for (int c = 0; c < map.cols - 1; c++)
                 {
@@ -160,15 +182,7 @@ namespace Apocalypse
                     }
                     Vector2 center = (map.nodes[r * map.cols + c].pos + map.nodes[r * map.cols + c + 1].pos +
                                       map.nodes[(r + 1) * map.cols + c].pos + map.nodes[(r + 1) * map.cols + c + 1].pos) / 4f;
-                    var rnd = new System.Random(gm.cfg.seed * 1009 + r * 97 + c * 13 + theme);
-                    bool wholeBlock = Free(center, 2.2f, 3.4f);
-                    switch (theme)
-                    {
-                        case 0: JungleBlock(center, rnd, wholeBlock, Free); break;
-                        case 1: CityBlock(center, rnd, Free); break;
-                        case 2: RuinsBlock(center, rnd, Free); break;
-                        default: TownBlock(center, rnd, wholeBlock, Free); break;
-                    }
+                    Block(center, theme, new System.Random(gm.cfg.seed * 1009 + r * 97 + c * 13 + theme));
                 }
 
             Vector2 size = map.Size;
@@ -176,6 +190,7 @@ namespace Apocalypse
             foreach (bool w in new[] { true, false })
             {
                 var side = map.nodes.Where(n => map.West(n.id) == w).Select(n => n.pos).ToList();
+                if (side.Count == 0) continue;
                 SideFx(w ? west : east, side.Min(q => q.x) - 2f, side.Max(q => q.x) + 2f, side.Min(q => q.y) - 2f, side.Max(q => q.y) + 2f);
             }
 

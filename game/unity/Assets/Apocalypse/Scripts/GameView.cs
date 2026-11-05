@@ -390,23 +390,34 @@ namespace Apocalypse
             foreach (var n in order)
             {
                 bool big = gm.cfg.escape && n.id == Sim.extraction;
-                int c0 = n.id % map.cols, r0 = n.id / map.cols;
+                var dirs = new List<Vector2>();
+                if (map.custom)
+                    for (int k = 0; k < 8; k++)
+                        dirs.Add(new Vector2(Mathf.Cos((k * 45f + 22.5f) * Mathf.Deg2Rad), Mathf.Sin((k * 45f + 22.5f) * Mathf.Deg2Rad)));
+                else
+                {
+                    int c0 = n.id % map.cols, r0 = n.id / map.cols;
+                    for (int dc = -1; dc <= 0; dc++)
+                        for (int dr = -1; dr <= 0; dr++)
+                        {
+                            int c = c0 + dc, r = r0 + dr;
+                            if (c < 0 || r < 0 || c >= map.cols - 1 || r >= map.rows - 1 || map.RiverInCell(r, c)) continue;
+                            Vector2 center = (map.nodes[r * map.cols + c].pos + map.nodes[r * map.cols + c + 1].pos +
+                                              map.nodes[(r + 1) * map.cols + c].pos + map.nodes[(r + 1) * map.cols + c + 1].pos) / 4f;
+                            dirs.Add((center - n.pos).normalized);
+                        }
+                }
                 Vector2 bestPos = n.pos, bestDir = new Vector2(1, 1).normalized;
                 float bestScore = float.MinValue;
-                for (int dc = -1; dc <= 0; dc++)
-                    for (int dr = -1; dr <= 0; dr++)
-                    {
-                        int c = c0 + dc, r = r0 + dr;
-                        if (c < 0 || r < 0 || c >= map.cols - 1 || r >= map.rows - 1 || map.RiverInCell(r, c)) continue;
-                        Vector2 center = (map.nodes[r * map.cols + c].pos + map.nodes[r * map.cols + c + 1].pos +
-                                          map.nodes[(r + 1) * map.cols + c].pos + map.nodes[(r + 1) * map.cols + c + 1].pos) / 4f;
-                        var dir = (center - n.pos).normalized;
-                        var pos = n.pos + dir * (big ? 2.0f : 2.2f);
-                        float clear = RoadClearance(pos);
-                        float crowd = taken.Count == 0 ? 99f : taken.Min(t => Vector2.Distance(t, pos));
-                        float score = Mathf.Min(clear, 1.6f) * 2f + Mathf.Min(crowd, 3f);
-                        if (score > bestScore) { bestScore = score; bestPos = pos; bestDir = dir; }
-                    }
+                foreach (var dir in dirs)
+                {
+                    var pos = n.pos + dir * (big ? 2.0f : 2.2f);
+                    float clear = RoadClearance(pos);
+                    float crowd = taken.Count == 0 ? 99f : taken.Min(t => Vector2.Distance(t, pos));
+                    float wet = riverLine.Count > 1 && CityMap.RiverDistance(riverLine, pos) < 2.2f ? -6f : 0f;
+                    float score = Mathf.Min(clear, 1.6f) * 2f + Mathf.Min(crowd, 3f) + wet;
+                    if (score > bestScore) { bestScore = score; bestPos = pos; bestDir = dir; }
+                }
                 facilityPos[n.id] = bestPos;
                 facilityDir[n.id] = bestDir;
                 taken.Add(bestPos);

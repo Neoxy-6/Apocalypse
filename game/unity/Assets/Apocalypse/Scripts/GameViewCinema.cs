@@ -231,13 +231,15 @@ namespace Apocalypse
 
         void BuildRiverFx(CityMap map, Vector2 size)
         {
-            for (int i = 0; i + 1 < map.river.Count; i++)
+            float walked = 0f;
+            for (int i = 0; i + 1 < riverLine.Count; i++)
             {
-                Vector2 a = new Vector2(map.river[i].x - 0.5f, map.river[i].y - 0.5f) * map.spacing, b = new Vector2(map.river[i + 1].x - 0.5f, map.river[i + 1].y - 0.5f) * map.spacing;
-                var mid = (a + b) / 2f;
-                bool horizontal = Mathf.Abs(b.x - a.x) > Mathf.Abs(b.y - a.y);
-                Particles(mapRoot, new Vector3(mid.x, 0.04f, mid.y), new Color(0.65f, 0.85f, 1f, 0.5f), new Color(0.4f, 0.6f, 0.9f, 0.35f),
-                          map.spacing * 1.2f, 3f, 0.02f, 0.14f, 0f, horizontal ? new Vector3(map.spacing, 2.2f, 0.02f) : new Vector3(2.2f, map.spacing, 0.02f), 0.25f, 0f, 2);
+                walked += Vector2.Distance(riverLine[i], riverLine[i + 1]);
+                if (walked < 3f) continue;
+                walked = 0f;
+                var p = riverLine[i];
+                Particles(mapRoot, new Vector3(p.x, 0.04f, p.y), new Color(0.65f, 0.85f, 1f, 0.5f), new Color(0.4f, 0.6f, 0.9f, 0.35f),
+                          3.6f, 3f, 0.02f, 0.14f, 0f, new Vector3(2.2f, 2.2f, 0.02f), 0.25f, 0f, 2);
             }
         }
 
