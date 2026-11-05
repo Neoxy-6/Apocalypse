@@ -8,7 +8,7 @@ from typing import Callable, Iterable
 import requests
 
 __all__ = [
-    "Game", "State", "CityGraph", "ApiError", "benchmark", "test_local", "play", "draw", "replay", "replay_match",
+    "Game", "State", "CityGraph", "ApiError", "benchmark", "test_local", "play", "draw", "replay", "replay_match", "load_map",
     "move", "goto", "pickup", "dropoff", "take_medkit", "use_medkit", "heal", "revive", "wait", "fix",
     "take_weapon", "drop", "drop_medkit", "drop_weapon",
 ]
@@ -292,12 +292,25 @@ class Game:
             time.sleep(interval)
 
 
+def load_map(src):
+    if src is None or isinstance(src, dict):
+        return src
+    src = str(src)
+    if src.startswith("http"):
+        data = requests.get(src.rstrip("/") + "/map", timeout=10).json()
+        if data.get("ok") is False:
+            raise ApiError(data.get("error", "伺服器沒有自訂地圖"))
+        return data
+    import json
+    return json.load(open(src, encoding="utf-8"))
+
 def test_local(make_policy: Callable[[], Callable], seeds=(1, 2, 3), name: str = "我", role: str = "",
-               classmates: int = 11, show: bool = True) -> list:
+               classmates: int = 11, show: bool = True, map=None) -> list:
     from apocalypse_local import LocalGame
+    map_data = load_map(map)
     games = []
     for seed in seeds:
-        g = LocalGame(seed=seed, name=name, role=role, classmates=classmates)
+        g = LocalGame(seed=seed, name=name, role=role, classmates=classmates, map_data=map_data)
         try:
             g.run(make_policy())
         except Exception:

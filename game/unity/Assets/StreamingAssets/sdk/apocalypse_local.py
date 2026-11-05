@@ -135,6 +135,9 @@ DIAG_DIV, REMOVE_DIV, KEEP_DEG = 14, 1, 2
 def _sign(x):
     return (x > 0) - (x < 0)
 
+MAP_TYPES = {"extraction": "shelter", "hospital": "hospital", "supply": "supply", "factory": "factory",
+             "generator": "generator", "armory": "armory", "road": "road"}
+
 class CityMap:
     spacing = 6.0
 
@@ -145,6 +148,10 @@ class CityMap:
         self.river_set: set = set()
         self.cuts: set = set()
         self.side_a: list[bool] = []
+        self.custom = False
+        self.themes = None
+        self.river_points: list = []
+        self.size = (0.0, 0.0)
         self.warp_x: list = []
         self.warp_y: list = []
         self.warp_w = self.warp_h = 0
@@ -158,6 +165,53 @@ class CityMap:
 
     def west(self, node):
         return self.side_a[node]
+
+    def load_custom(self, data):
+        f = np.float32
+        self.custom = True
+        raw = data["nodes"]
+        minx, miny = min(f(n["x"]) for n in raw), min(f(n["y"]) for n in raw)
+        self.start_node = 0
+        for i, d in enumerate(raw):
+            nd = Node(i, (_f32(f(d["x"]) - minx), _f32(f(d["y"]) - miny)))
+            nd.type = MAP_TYPES.get(d.get("type", "road"), "road")
+            if nd.type == "supply":
+                nd.medkits = 3
+            if d.get("type") == "extraction":
+                self.start_node = i
+            self.nodes.append(nd)
+        self.size = (max(n.pos[0] for n in self.nodes), max(n.pos[1] for n in self.nodes))
+        count = len(self.nodes)
+        for e in data.get("edges") or []:
+            a, b = int(e["a"]), int(e["b"])
+            if a != b and 0 <= a < count and 0 <= b < count:
+                self._add(a, b, bool(e.get("bridge", False)))
+        self.river_points = [(_f32(f(p["x"]) - minx), _f32(f(p["y"]) - miny)) for p in data.get("river") or []]
+        self.themes = data.get("themes")
+        side = [False] * count
+        side[0] = True
+        queue = [0]
+        while queue:
+            u = queue.pop()
+            for i in self.nodes[u].edges:
+                e = self.edges[i]
+                v = e.other(u)
+                if e.bridge or side[v]:
+                    continue
+                side[v] = True
+                queue.append(v)
+        self.side_a = side
+        seeds = [i for i, d in enumerate(raw) if d.get("infected")]
+        if not seeds:
+            start = self.nodes[self.start_node].pos
+            seeds = [n.id for n in sorted(self.nodes, key=lambda n: (-_dist(n.pos, start), n.id))[:2]]
+        for s in seeds:
+            self.nodes[s].infection = 1.0
+            for i in self.nodes[s].edges:
+                o = self.nodes[self.edges[i].other(s)]
+                if o.infection < 0.5:
+                    o.infection = 0.5
+        self.recompute()
 
     def warp(self, gx, gy):
         f = np.float32
@@ -599,12 +653,15 @@ class Incident:
 
 class Sim:
 
-    def __init__(self, **cfg):
+    def __init__(self, map_data=None, **cfg):
         self.cfg = dict(DEFAULTS, **cfg)
         c = self.cfg
         self.rng = DotNetRandom(c["seed"])
         self.map = CityMap(c["mapCols"], c["mapRows"], c["bridges"])
-        self.map.generate(self.rng)
+        if map_data:
+            self.map.load_custom(map_data)
+        else:
+            self.map.generate(self.rng)
         self.status, self.time, self.city_infection, self.end_reason = "lobby", 0.0, 0.0, ""
         self.class_won = False
 
@@ -615,7 +672,10 @@ class Sim:
                     n.type = "road"
         self.extraction = m.start_node
         drng = DotNetRandom(_i32(self.cfg["seed"] * 7919 + 17))
-        west, east = DISTRICTS[drng.next(4)], DISTRICTS[drng.next(4)]
+        if m.themes and len(m.themes) == 2 and all(t in DISTRICTS for t in m.themes):
+            west, east = m.themes
+        else:
+            west, east = DISTRICTS[drng.next(4)], DISTRICTS[drng.next(4)]
         for nd in m.nodes:
             nd.district = west if m.west(nd.id) else east
         for nd in m.nodes:
@@ -813,6 +873,10 @@ class Sim:
         self.fuel_required = max(2, _round(n * c["fuelPerPlayer"]) - self.fuel_discount)
 
         def ring(nd):
+            if m.custom:
+                f = np.float32
+                x, y, sx, sy = f(nd.pos[0]), f(nd.pos[1]), f(m.size[0]), f(m.size[1])
+                return int(min(min(x, sx - x), min(y, sy - y)) / f(m.spacing))
             r, cc = nd.id // m.cols, nd.id % m.cols
             return min(r, m.rows - 1 - r, cc, m.cols - 1 - cc)
         pool = [nd for nd in m.nodes if nd.type == "road" and m.dist[self.extraction, nd.id] >= 6 and self.in_zone(nd.pos)]
