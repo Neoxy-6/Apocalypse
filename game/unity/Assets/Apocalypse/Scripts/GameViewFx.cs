@@ -249,18 +249,13 @@ namespace Apocalypse
                     var spot = SideSpot(node); fx.pos = spot;
                     var crack = FxRing(root, spot, new Color(0.1f, 0.05f, 0.05f, 0.8f), 2.4f, 0.03f);
                     var body = Group(root, spot, 225f);
-                    var skin = new Color(0.3f, 0.5f, 0.22f);
-                    Part(body, PrimitiveType.Capsule, skin, new Vector3(0, 0.95f, 0), new Vector3(0.75f, 0.85f, 0.6f));
-                    Part(body, PrimitiveType.Sphere, skin * 1.1f, new Vector3(0, 2.0f, 0), Vector3.one * 0.55f);
-                    Part(body, PrimitiveType.Cube, new Color(1f, 0.1f, 0.05f), new Vector3(-0.12f, 2.05f, -0.26f), new Vector3(0.1f, 0.06f, 0.04f), default, true);
-                    Part(body, PrimitiveType.Cube, new Color(1f, 0.1f, 0.05f), new Vector3(0.12f, 2.05f, -0.26f), new Vector3(0.1f, 0.06f, 0.04f), default, true);
-                    Part(body, PrimitiveType.Cube, new Color(0.9f, 0.75f, 0.2f), new Vector3(0, 2.38f, 0), new Vector3(0.4f, 0.12f, 0.4f), default, true);
-                    Part(body, PrimitiveType.Capsule, skin * 0.9f, new Vector3(-0.5f, 1.3f, -0.3f), new Vector3(0.22f, 0.45f, 0.22f), new Vector3(70f, 0, 10f));
-                    Part(body, PrimitiveType.Capsule, skin * 0.9f, new Vector3(0.5f, 1.3f, -0.3f), new Vector3(0.22f, 0.45f, 0.22f), new Vector3(70f, 0, -10f));
+                    var king = ZombieKing(body, 2.3f);
                     Particles(root, W(spot, 0.05f), new Color(0.45f, 0.38f, 0.3f, 0.5f), new Color(0.3f, 0.26f, 0.22f, 0.4f), 8f, 1.5f, 0.4f, 0.7f, 0f, new Vector3(1.4f, 1.4f, 0.05f), 0.3f);
                     fx.tick = (t, left) =>
                     {
                         body.rotation = Quaternion.Euler(0, 225f, Mathf.Sin(t * 2f) * 8f);
+                        king.armL.localRotation = Quaternion.Euler(-50f + Mathf.Sin(t * 4f) * 20f, 0, 0);
+                        king.armR.localRotation = Quaternion.Euler(-50f - Mathf.Sin(t * 4f) * 20f, 0, 0);
                         body.position = W(spot, Mathf.Abs(Mathf.Sin(t * 2f)) * 0.08f);
                         crack.transform.localScale = Vector3.one * (2.3f + 0.3f * Mathf.Abs(Mathf.Sin(t * 2f)));
                     };

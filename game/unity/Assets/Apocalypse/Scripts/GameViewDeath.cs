@@ -33,11 +33,12 @@ namespace Apocalypse
 
         (SpriteRenderer, SpriteRenderer) MakeSwirlEyes(Transform head)
         {
-            SpriteRenderer Make(float x)
+            SpriteRenderer Make(bool left)
             {
                 var go = new GameObject("swirl");
                 go.transform.SetParent(head, false);
-                go.transform.localPosition = new Vector3(x, 0.27f, 0.235f);
+                go.transform.localPosition = CapyEye(left) + new Vector3((left ? -1f : 1f) * (Capy().eyeOut + 0.01f), 0, 0);
+                go.transform.localRotation = Quaternion.Euler(0, left ? 90f : -90f, 0);
                 go.transform.localScale = Vector3.one * 0.13f;
                 var sr = go.AddComponent<SpriteRenderer>();
                 sr.sprite = SwirlSprite();
@@ -45,7 +46,7 @@ namespace Apocalypse
                 sr.enabled = false;
                 return sr;
             }
-            return (Make(-0.11f), Make(0.11f));
+            return (Make(true), Make(false));
         }
 
         static void SetSwirl(Renderer eyeL, Renderer eyeR, SpriteRenderer sl, SpriteRenderer sr, bool on, float t)
@@ -103,10 +104,10 @@ namespace Apocalypse
             }
             float k = now - v.deadAt;
             if (k > 2.4f) return false;
-            v.model.localPosition = new Vector3(0, 0.22f, 0);
-            v.model.localRotation = v.facing * Quaternion.Euler(-88f, 0, 0);
-            v.armL.localRotation = Quaternion.Euler(0, 0, -80f);
-            v.armR.localRotation = Quaternion.Euler(0, 0, 80f);
+            v.model.localPosition = new Vector3(0, 0.3f, 0);
+            v.model.localRotation = v.facing * Quaternion.Euler(0, 0, 90f);
+            v.armL.localRotation = Quaternion.Euler(-40f, 0, 0);
+            v.armR.localRotation = Quaternion.Euler(-40f, 0, 0);
             SetSwirl(v.eyeL, v.eyeR, v.swirlL, v.swirlR, true, t);
             float s = k > 1.4f ? Mathf.Clamp01(1f - (k - 1.4f)) : 1f;
             v.body.transform.position = W(Shown(p), GroundH(Shown(p)) - (1f - s) * 0.4f);
@@ -129,16 +130,17 @@ namespace Apocalypse
             guardModel.SetParent(guardRoot, false);
             guardModel.localScale = Vector3.one * 0.8f;
             var olive = new Color(0.36f, 0.42f, 0.28f);
-            PlushBody(guardModel, CapyFur, CapyDark, olive, false, out var head, out var armL, out var armR, out _, out _, out _, out _);
-            Part(head, PrimitiveType.Sphere, olive * 0.9f, new Vector3(0, 0.36f, -0.02f), new Vector3(0.44f, 0.2f, 0.44f));
-            Part(head, PrimitiveType.Cube, olive * 0.8f, new Vector3(0, 0.33f, 0.12f), new Vector3(0.36f, 0.03f, 0.2f));
-            armL.localRotation = Quaternion.Euler(-80f, 0, 12f);
-            armR.localRotation = Quaternion.Euler(-80f, 0, -12f);
-            var gun = Part(guardModel, PrimitiveType.Cube, new Color(0.15f, 0.15f, 0.16f), new Vector3(0, 0.55f, 0.42f), new Vector3(0.08f, 0.1f, 0.6f));
-            Part(guardModel, PrimitiveType.Cube, new Color(0.3f, 0.22f, 0.15f), new Vector3(0, 0.47f, 0.2f), new Vector3(0.07f, 0.16f, 0.12f));
+            PlushBody(guardModel, Color.white, olive, false, out var head, out var armL, out var armR, out _, out _, out _, out _);
+            var top = CapyHeadTop;
+            Part(head, PrimitiveType.Sphere, olive * 0.9f, top + new Vector3(0, -0.02f, -0.02f), new Vector3(0.42f, 0.16f, 0.4f));
+            Part(head, PrimitiveType.Cube, olive * 0.8f, top + new Vector3(0, -0.04f, 0.16f), new Vector3(0.34f, 0.03f, 0.16f));
+            armL.localRotation = Quaternion.Euler(-40f, 0, 0);
+            armR.localRotation = Quaternion.Euler(-40f, 0, 0);
+            var gun = Part(guardModel, PrimitiveType.Cube, new Color(0.15f, 0.15f, 0.16f), new Vector3(0, 0.5f, 0.5f), new Vector3(0.08f, 0.1f, 0.6f));
+            Part(guardModel, PrimitiveType.Cube, new Color(0.3f, 0.22f, 0.15f), new Vector3(0, 0.42f, 0.28f), new Vector3(0.07f, 0.16f, 0.12f));
             guardMuzzle = new GameObject("muzzle").transform;
             guardMuzzle.SetParent(guardModel, false);
-            guardMuzzle.localPosition = new Vector3(0, 0.56f, 0.75f);
+            guardMuzzle.localPosition = new Vector3(0, 0.51f, 0.83f);
             guardFlash = Part(guardMuzzle, PrimitiveType.Sphere, new Color(1f, 0.85f, 0.4f), Vector3.zero, Vector3.one * 0.35f, default, true).GetComponent<Renderer>();
             guardFlash.enabled = false;
             guardTracer = NewLine(mapRoot, 0.05f, 9);

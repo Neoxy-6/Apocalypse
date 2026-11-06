@@ -324,8 +324,7 @@ namespace Apocalypse
                     {
                         var body = new GameObject("boss").transform; body.SetParent(root, false);
                         body.position = At(spot, 0f);
-                        Part(body, PrimitiveType.Capsule, new Color(0.35f, 0.5f, 0.3f), new Vector3(0, 1f, 0), new Vector3(1f, 1f, 0.9f));
-                        Part(body, PrimitiveType.Sphere, new Color(0.4f, 0.55f, 0.35f), new Vector3(0, 2.1f, 0), Vector3.one * 0.8f);
+                        ZombieKing(body, 2.4f, false);
                         var crown = new GameObject("crown").transform; crown.SetParent(root, false);
                         for (int i = 0; i < 5; i++)
                             Part(crown, PrimitiveType.Cube, new Color(1f, 0.82f, 0.2f), new Vector3(Mathf.Cos(i * 1.256f) * 0.25f, 0, Mathf.Sin(i * 1.256f) * 0.25f), new Vector3(0.1f, 0.25f, 0.1f), default, true);
@@ -649,10 +648,7 @@ namespace Apocalypse
                     case "boss":
                     {
                         var body = new GameObject("boss").transform; body.SetParent(root, false);
-                        Part(body, PrimitiveType.Capsule, new Color(0.35f, 0.5f, 0.3f), new Vector3(0, 1f, 0), new Vector3(1f, 1f, 0.9f));
-                        Part(body, PrimitiveType.Sphere, new Color(0.4f, 0.55f, 0.35f), new Vector3(0, 2.1f, 0), Vector3.one * 0.8f);
-                        Part(body, PrimitiveType.Sphere, new Color(1f, 0.2f, 0.1f), new Vector3(-0.15f, 2.2f, 0.35f), Vector3.one * 0.12f, default, true);
-                        Part(body, PrimitiveType.Sphere, new Color(1f, 0.2f, 0.1f), new Vector3(0.15f, 2.2f, 0.35f), Vector3.one * 0.12f, default, true);
+                        ZombieKing(body, 2.4f);
                         var rings = Enumerable.Range(0, 3).Select(_ => FxRing(root, spot, new Color(1f, 0.2f, 0.15f), 1f, 0.08f)).ToArray();
                         Shake(0.35f);
                         o.dur = 2.2f;

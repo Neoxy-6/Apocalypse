@@ -243,61 +243,29 @@ namespace Apocalypse
             }
         }
 
-        static readonly Color CapyFur = new Color(0.66f, 0.48f, 0.32f), CapyDark = new Color(0.40f, 0.28f, 0.19f);
-        static readonly Color ZombieFur = new Color(0.50f, 0.58f, 0.44f), ZombieDark = new Color(0.30f, 0.36f, 0.28f);
+        static readonly Color ZombieTint = new Color(0.62f, 0.86f, 0.56f);
 
-        Renderer PlushBody(Transform m, Color fur, Color dark, Color outfit, bool zombie,
+        Renderer PlushBody(Transform m, Color tint, Color outfit, bool zombie,
                            out Transform head, out Transform armL, out Transform armR, out Transform legL, out Transform legR, out Renderer eyeL, out Renderer eyeR)
         {
-
-            var body = Part(m, PrimitiveType.Sphere, outfit, new Vector3(0, 0.42f, 0), new Vector3(0.5f, 0.56f, 0.44f)).GetComponent<Renderer>();
-            Part(m, PrimitiveType.Sphere, fur * 1.12f, new Vector3(0, 0.38f, 0.12f), new Vector3(0.32f, 0.34f, 0.24f));
-            Part(m, PrimitiveType.Cylinder, outfit * 0.85f, new Vector3(0, 0.66f, 0), new Vector3(0.36f, 0.03f, 0.32f));
-
-            head = new GameObject("head").transform;
-            head.SetParent(m, false);
-            head.localPosition = new Vector3(0, 0.7f, 0);
-            Part(head, PrimitiveType.Sphere, fur, new Vector3(0, 0.2f, 0), new Vector3(0.46f, 0.42f, 0.46f));
-            Part(head, PrimitiveType.Sphere, dark * 1.15f, new Vector3(0, 0.14f, 0.2f), new Vector3(0.32f, 0.24f, 0.26f));
-            Part(head, PrimitiveType.Cube, new Color(0.14f, 0.1f, 0.08f), new Vector3(0, 0.2f, 0.33f), new Vector3(0.12f, 0.04f, 0.02f));
-            Part(head, PrimitiveType.Sphere, dark, new Vector3(-0.15f, 0.4f, -0.02f), new Vector3(0.1f, 0.08f, 0.06f));
-            if (!zombie) Part(head, PrimitiveType.Sphere, dark, new Vector3(0.15f, 0.4f, -0.02f), new Vector3(0.1f, 0.08f, 0.06f));
-            var eyeColor = zombie ? new Color(0.85f, 1f, 0.3f) : new Color(0.07f, 0.05f, 0.05f);
-            float e = zombie ? 0.075f : 0.065f;
-            eyeL = Part(head, PrimitiveType.Sphere, eyeColor, new Vector3(-0.11f, 0.27f, 0.19f), Vector3.one * e, default, zombie).GetComponent<Renderer>();
-            eyeR = Part(head, PrimitiveType.Sphere, eyeColor, new Vector3(0.11f, 0.27f, 0.19f), Vector3.one * e, default, zombie).GetComponent<Renderer>();
-            if (!zombie)
+            var rig = BuildCapy(m, tint);
+            head = rig.head; armL = rig.armL; armR = rig.armR; legL = rig.legL; legR = rig.legR;
+            eyeL = rig.eyeL; eyeR = rig.eyeR;
+            if (zombie)
             {
-                Part(head, PrimitiveType.Sphere, Color.white, new Vector3(-0.1f, 0.29f, 0.22f), Vector3.one * 0.022f, default, true);
-                Part(head, PrimitiveType.Sphere, Color.white, new Vector3(0.12f, 0.29f, 0.22f), Vector3.one * 0.022f, default, true);
-                Part(head, PrimitiveType.Sphere, new Color(1f, 0.58f, 0.6f), new Vector3(-0.17f, 0.15f, 0.15f), new Vector3(0.08f, 0.045f, 0.03f));
-                Part(head, PrimitiveType.Sphere, new Color(1f, 0.58f, 0.6f), new Vector3(0.17f, 0.15f, 0.15f), new Vector3(0.08f, 0.045f, 0.03f));
+                var glow = UnlitMat(new Color(0.85f, 1f, 0.3f));
+                eyeL.sharedMaterial = glow; eyeR.sharedMaterial = glow;
             }
-
-            armL = Limb(m, new Vector3(-0.27f, 0.58f, 0), outfit * 0.92f, 0.13f, 0.28f);
-            armR = Limb(m, new Vector3(0.27f, 0.58f, 0), outfit * 0.92f, 0.13f, 0.28f);
-            Part(armL, PrimitiveType.Sphere, fur, new Vector3(0, -0.28f, 0), Vector3.one * 0.12f);
-            Part(armR, PrimitiveType.Sphere, fur, new Vector3(0, -0.28f, 0), Vector3.one * 0.12f);
-            legL = Limb(m, new Vector3(-0.12f, 0.18f, 0), dark, 0.14f, 0.14f);
-            legR = Limb(m, new Vector3(0.12f, 0.18f, 0), dark, 0.14f, 0.14f);
-            Part(legL, PrimitiveType.Sphere, dark, new Vector3(0, -0.15f, 0.05f), new Vector3(0.16f, 0.08f, 0.22f));
-            Part(legR, PrimitiveType.Sphere, dark, new Vector3(0, -0.15f, 0.05f), new Vector3(0.16f, 0.08f, 0.22f));
-            return body;
+            CapyVest(rig, outfit);
+            return rig.bodyRenderer;
         }
 
         GameObject MiniCapy(Transform parent, Color shirt)
         {
             var g = new GameObject("civilian").transform;
             g.SetParent(parent, false);
-            Part(g, PrimitiveType.Sphere, shirt, new Vector3(0, 0.15f, 0), new Vector3(0.24f, 0.26f, 0.22f));
-            Part(g, PrimitiveType.Sphere, CapyFur, new Vector3(0, 0.38f, 0), new Vector3(0.25f, 0.23f, 0.25f));
-            Part(g, PrimitiveType.Sphere, CapyDark * 1.15f, new Vector3(0, 0.35f, 0.11f), new Vector3(0.17f, 0.13f, 0.13f));
-            Part(g, PrimitiveType.Sphere, new Color(0.07f, 0.05f, 0.05f), new Vector3(-0.06f, 0.42f, 0.1f), Vector3.one * 0.035f);
-            Part(g, PrimitiveType.Sphere, new Color(0.07f, 0.05f, 0.05f), new Vector3(0.06f, 0.42f, 0.1f), Vector3.one * 0.035f);
-            Part(g, PrimitiveType.Sphere, CapyDark, new Vector3(-0.08f, 0.5f, 0), Vector3.one * 0.05f);
-            Part(g, PrimitiveType.Sphere, CapyDark, new Vector3(0.08f, 0.5f, 0), Vector3.one * 0.05f);
-            Part(g, PrimitiveType.Capsule, shirt * 0.9f, new Vector3(-0.15f, 0.36f, 0), new Vector3(0.06f, 0.1f, 0.06f), new Vector3(0, 0, 25f));
-            Part(g, PrimitiveType.Capsule, shirt * 0.9f, new Vector3(0.15f, 0.36f, 0), new Vector3(0.06f, 0.1f, 0.06f), new Vector3(0, 0, -25f));
+            var rig = BuildCapy(g, Color.white, 0.55f);
+            CapyVest(rig, shirt);
             return g.gameObject;
         }
 
@@ -308,16 +276,17 @@ namespace Apocalypse
             v.model = new GameObject("model").transform;
             v.model.SetParent(v.body.transform, false);
             v.furColor = p.color;
-            var fur = Vary(CapyFur, new System.Random(p.id), 0.08f);
-            v.torso = PlushBody(v.model, fur, CapyDark, p.color, false, out v.head, out v.armL, out v.armR, out v.legL, out v.legR, out v.eyeL, out v.eyeR);
+            var fur = Vary(Color.white, new System.Random(p.id), 0.06f);
+            v.torso = PlushBody(v.model, fur, p.color, false, out v.head, out v.armL, out v.armR, out v.legL, out v.legR, out v.eyeL, out v.eyeR);
             (v.swirlL, v.swirlR) = MakeSwirlEyes(v.head);
 
-            v.helmet = Part(v.head, PrimitiveType.Sphere, p.color * 0.9f, new Vector3(0, 0.36f, -0.03f), new Vector3(0.4f, 0.2f, 0.4f)).GetComponent<Renderer>();
-            Part(v.head, PrimitiveType.Sphere, new Color(0.9f, 0.88f, 0.84f), new Vector3(0, 0.47f, -0.03f), Vector3.one * 0.1f);
+            var top = CapyHeadTop;
+            v.helmet = Part(v.head, PrimitiveType.Sphere, p.color * 0.9f, top + new Vector3(0, -0.02f, -0.03f), new Vector3(0.36f, 0.14f, 0.34f)).GetComponent<Renderer>();
+            Part(v.head, PrimitiveType.Sphere, new Color(0.9f, 0.88f, 0.84f), top + new Vector3(0, 0.05f, -0.03f), Vector3.one * 0.08f);
             v.gun = new GameObject("gun");
             v.gun.transform.SetParent(v.armR, false);
-            Part(v.gun.transform, PrimitiveType.Cube, new Color(0.16f, 0.17f, 0.18f), new Vector3(0, -0.3f, 0.18f), new Vector3(0.07f, 0.09f, 0.5f));
-            Part(v.gun.transform, PrimitiveType.Cube, new Color(0.35f, 0.24f, 0.14f), new Vector3(0, -0.36f, -0.05f), new Vector3(0.06f, 0.14f, 0.12f));
+            Part(v.gun.transform, PrimitiveType.Cube, new Color(0.16f, 0.17f, 0.18f), new Vector3(0, 0.08f, 0.26f), new Vector3(0.07f, 0.09f, 0.5f));
+            Part(v.gun.transform, PrimitiveType.Cube, new Color(0.35f, 0.24f, 0.14f), new Vector3(0, 0.02f, 0.06f), new Vector3(0.06f, 0.12f, 0.1f));
             v.gun.SetActive(false);
             v.glow = Flat(dynRoot, soft, new Color(p.color.r, p.color.g, p.color.b, 0.35f), 2.0f, 5, 0.03f);
             v.dust = Particles(v.body.transform, Vector3.zero, new Color(0.55f, 0.5f, 0.45f, 0.45f), new Color(0.4f, 0.38f, 0.35f, 0.35f), 0f, 0.7f, 0.4f, 0.25f, -0.05f, new Vector3(0.2f, 0.2f, 0.05f), 0.2f, 0f, 5);
@@ -359,26 +328,21 @@ namespace Apocalypse
             float w = v.walk;
             if (downed)
             {
-                v.model.localPosition = new Vector3(0, 0.22f, 0);
-                v.model.localRotation = v.facing * Quaternion.Euler(-88f, 0, 0);
-                float k = Mathf.Sin(t * 12f) * 10f;
-                v.armL.localRotation = Quaternion.Euler(0, 0, -80f + k);
-                v.armR.localRotation = Quaternion.Euler(0, 0, 80f - k);
-                v.legL.localRotation = Quaternion.Euler(0, 0, -25f);
-                v.legR.localRotation = Quaternion.Euler(0, 0, 25f);
+                v.model.localPosition = new Vector3(0, 0.3f, 0);
+                v.model.localRotation = v.facing * Quaternion.Euler(0, 0, 90f);
+                v.armL.localRotation = v.armR.localRotation = Quaternion.Euler(-30f, 0, 0);
+                v.legL.localRotation = v.legR.localRotation = Quaternion.identity;
                 v.head.localRotation = Quaternion.Euler(0, Mathf.Sin(t * 3f) * 20f, 0);
                 SetSquash(v.model, 1f);
             }
             else if (moving)
             {
                 float step = Mathf.Sin(w);
-                v.model.localPosition = new Vector3(0, Mathf.Abs(Mathf.Cos(w)) * 0.06f, 0);
-                v.model.localRotation = v.facing * Quaternion.Euler(8f, 0, step * 10f);
-                v.legL.localRotation = Quaternion.Euler(step * 40f, 0, 0);
-                v.legR.localRotation = Quaternion.Euler(-step * 40f, 0, 0);
-                v.armL.localRotation = Quaternion.Euler(-Mathf.Sin(w - 0.6f) * 55f, 0, -18f - Mathf.Abs(step) * 12f);
-                v.armR.localRotation = Quaternion.Euler(Mathf.Sin(w - 0.6f) * 55f, 0, 18f + Mathf.Abs(step) * 12f);
-                v.head.localRotation = Quaternion.Euler(Mathf.Sin(w * 2f - 1.2f) * 7f, 0, -Mathf.Sin(w - 0.9f) * 14f);
+                v.model.localPosition = new Vector3(0, Mathf.Abs(Mathf.Cos(w)) * 0.09f, 0);
+                v.model.localRotation = v.facing * Quaternion.Euler(-Mathf.Sin(w * 2f) * 4f, 0, step * 6f);
+                v.legL.localRotation = v.legR.localRotation = Quaternion.identity;
+                v.armL.localRotation = v.armR.localRotation = Quaternion.identity;
+                v.head.localRotation = Quaternion.Euler(Mathf.Sin(w * 2f - 1.2f) * 5f, 0, -Mathf.Sin(w - 0.9f) * 8f);
                 SetSquash(v.model, 1f + Mathf.Cos(w * 2f) * 0.06f);
             }
             else
@@ -387,15 +351,13 @@ namespace Apocalypse
                 v.model.localRotation = v.facing * Quaternion.Euler(0, 0, Mathf.Sin(t * 1.6f + p.id) * 4f);
                 v.legL.localRotation = Quaternion.identity;
                 v.legR.localRotation = Quaternion.identity;
-                v.armL.localRotation = Quaternion.Euler(Mathf.Sin(t * 1.6f + p.id) * 8f, 0, -12f);
-                v.armR.localRotation = Quaternion.Euler(-Mathf.Sin(t * 1.6f + p.id) * 8f, 0, 12f);
+                v.armL.localRotation = v.armR.localRotation = Quaternion.identity;
                 v.head.localRotation = Quaternion.Euler(0, Mathf.Sin(t * 0.7f + p.id * 2f) * 25f, Mathf.Sin(t * 1.6f + p.id) * 6f);
                 SetSquash(v.model, 1f + Mathf.Sin(t * 3f + p.id) * 0.025f);
             }
             if (!downed && p.cargo.Any(id => Sim.TaskById(id) is GameTask tk && tk.type != TaskType.Rescue))
             {
-                v.armL.localRotation = Quaternion.Euler(0, 0, -160f + Mathf.Sin(w) * 8f);
-                v.armR.localRotation = Quaternion.Euler(0, 0, 160f - Mathf.Sin(w) * 8f);
+                v.armL.localRotation = v.armR.localRotation = Quaternion.Euler(-55f, 0, 0);
             }
             v.body.transform.position = W(Shown(p), GroundH(Shown(p)));
             v.body.transform.localScale = Vector3.one * 1.3f;
@@ -415,19 +377,18 @@ namespace Apocalypse
             v.body.transform.SetParent(dynRoot, false);
             v.model = new GameObject("model").transform;
             v.model.SetParent(v.body.transform, false);
-            var rnd = new System.Random(z.id);
+            var rnd = new System.Random(unchecked((int)((uint)(z.id + 1) * 2654435761u)));
             var rag = Vary(new Color(0.38f, 0.34f, 0.36f), rnd, 0.25f);
-            PlushBody(v.model, Vary(ZombieFur, rnd, 0.12f), ZombieDark, rag, true, out v.head, out v.armL, out v.armR, out _, out _, out v.eyeL, out v.eyeR);
+            PlushBody(v.model, Vary(ZombieTint, rnd, 0.1f), rag, true, out v.head, out v.armL, out v.armR, out _, out _, out v.eyeL, out v.eyeR);
             (v.swirlL, v.swirlR) = MakeSwirlEyes(v.head);
 
-            Part(v.model, PrimitiveType.Sphere, ZombieFur, new Vector3(0.12f, 0.5f, 0.2f), new Vector3(0.12f, 0.1f, 0.06f));
-            Part(v.model, PrimitiveType.Cube, new Color(0.12f, 0.1f, 0.1f), new Vector3(-0.15f, 0.36f, 0.21f), new Vector3(0.14f, 0.015f, 0.02f), new Vector3(0, 0, 20f));
             var stitch = new Color(0.16f, 0.12f, 0.12f);
-            Part(v.head, PrimitiveType.Cube, stitch, new Vector3(0.04f, 0.33f, 0.2f), new Vector3(0.18f, 0.018f, 0.02f), new Vector3(-25f, 0, -18f));
+            var top = CapyHeadTop + new Vector3(0.06f, 0.005f, 0f);
+            Part(v.head, PrimitiveType.Cube, stitch, top, new Vector3(0.03f, 0.02f, 0.22f), new Vector3(0, 20f, 0));
             for (int i = -1; i <= 1; i++)
-                Part(v.head, PrimitiveType.Cube, stitch, new Vector3(0.04f + i * 0.055f, 0.33f - i * 0.018f, 0.2f), new Vector3(0.015f, 0.06f, 0.02f), new Vector3(-25f, 0, -18f));
+                Part(v.head, PrimitiveType.Cube, stitch, top + Quaternion.Euler(0, 20f, 0) * new Vector3(0, 0, i * 0.06f), new Vector3(0.09f, 0.02f, 0.02f), new Vector3(0, 20f, 0));
             v.phase = (float)rnd.NextDouble() * 10f;
-            v.tempo = 0.75f + (float)rnd.NextDouble() * 0.6f;
+            v.tempo = 0.6f + (float)rnd.NextDouble() * 0.9f;
             v.sway = 0.6f + (float)rnd.NextDouble() * 0.8f;
             v.lastPos = z.pos;
             v.facing = Quaternion.Euler(0, (float)rnd.NextDouble() * 360f, 0);
@@ -460,8 +421,8 @@ namespace Apocalypse
                 v.model.localPosition = new Vector3(0, moving ? Mathf.Abs(Mathf.Cos(w)) * (chase ? 0.07f : 0.03f) : 0f, 0);
                 v.model.localRotation = v.facing * Quaternion.Euler(lean, 0, ((moving ? step * 14f : Mathf.Sin(t * 1.3f * v.tempo + v.phase) * 6f) + 6f) * v.sway);
                 v.head.localRotation = Quaternion.Euler(10f, 0, 18f + Mathf.Sin(w - 1f) * 8f);
-                v.armL.localRotation = Quaternion.Euler(-85f + Mathf.Sin(w) * 10f, 0, 0);
-                v.armR.localRotation = Quaternion.Euler(-85f - Mathf.Sin(w) * 10f, 0, 0);
+                v.armL.localRotation = Quaternion.Euler(-50f + Mathf.Sin(w) * 10f, 0, 0);
+                v.armR.localRotation = Quaternion.Euler(-50f - Mathf.Sin(w) * 10f, 0, 0);
                 SetSquash(v.model, 1f + (moving ? Mathf.Cos(w * 2f) * 0.05f : Mathf.Sin(t * 2f * v.tempo + v.phase) * 0.03f) * v.sway);
             }
 
@@ -483,8 +444,8 @@ namespace Apocalypse
                 v.model.localPosition = new Vector3(0, Mathf.Abs(Mathf.Sin(sw * 0.5f)) * 0.05f, 0);
                 v.model.localRotation = v.facing * Quaternion.Euler(24f + Mathf.Sin(sw) * 7f, 0, Mathf.Sin(sw * 0.5f) * 6f);
                 v.head.localRotation = Quaternion.Euler(18f + Mathf.Sin(sw * 2f) * 10f, 0, 0);
-                v.armL.localRotation = Quaternion.Euler(-140f + Mathf.Sin(sw) * 75f, 0, 0);
-                v.armR.localRotation = Quaternion.Euler(-140f - Mathf.Sin(sw) * 75f, 0, 0);
+                v.armL.localRotation = Quaternion.Euler(-45f + Mathf.Sin(sw) * 40f, 0, 0);
+                v.armR.localRotation = Quaternion.Euler(-45f - Mathf.Sin(sw) * 40f, 0, 0);
                 SetSquash(v.model, 1f + Mathf.Sin(sw) * 0.06f);
             }
             v.body.transform.position = W(Shown(z), GroundH(Shown(z)));

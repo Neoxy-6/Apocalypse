@@ -146,5 +146,9 @@
 - 25 秒內連續拿到分數，會越拿越多。
 - 倒地會扣分，倒越多次扣越多。
 
-# 想自己畫地圖？
+## 想自己畫地圖？
 看看 [Map Editor](game/editor/README.md)
+
+## 素材來源
+
+卡皮巴拉模型：[Capybara](https://sketchfab.com/3d-models/capybara-b48dfa5224824446843b5870ea0794c1) by [Gotche](https://sketchfab.com/Gotche)， [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) 授權。
