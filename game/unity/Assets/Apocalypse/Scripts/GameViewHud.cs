@@ -113,7 +113,7 @@ namespace Apocalypse
             Pill(tagR, WcBeige);
             GUI.Label(tagR, $"<color=#3a3233>{tag}</color>", wcTag);
             if (fuelPhase)
-                GUI.Label(new Rect(tagR.xMax + 14, tagR.y + 2, 400, 28), "<color=#ff8a75>安全區外倒地無人救援將無法復活</color>", wcSmall);
+                GUI.Label(new Rect(tagR.x, tagR.yMax + 10, 400, 28), "<color=#ff8a75>安全區外倒地無人救援將無法復活</color>", wcSmall);
 
             string clock = Clock(Sim.TimeLeft);
             int lead = 0;
@@ -128,7 +128,7 @@ namespace Apocalypse
             GUI.Label(new Rect(W - 600, 90, 582, 34),
                       $"<color={WcBeigeHex}>{GameSim.PhaseNames[Sim.Phase]}</color><color={WcSoftHex}> · </color><color=#c9e3a8>現存殭屍 {Sim.zombies.Count}</color>",
                       new GUIStyle(wcSmall) { alignment = TextAnchor.MiddleRight, fontSize = 20 });
-            GoalBar(new Vector2(bar.x + 26, bar.yMax + 48), fuelPhase, frac);
+            GoalBar(new Vector2(tagR.xMax + 12, tagR.center.y - 22), fuelPhase, frac);
             string buffs = "";
             if (Sim.time < Sim.speedBoostUntil) buffs += $"<color=#9be7b0>全員加速 {Clock(Sim.speedBoostUntil - Sim.time)}</color>   ";
             if (Sim.time < Sim.zombieStunUntil) buffs += $"<color=#c7b3ff>殭屍僵直 {Clock(Sim.zombieStunUntil - Sim.time)}</color>   ";
@@ -188,7 +188,7 @@ namespace Apocalypse
         void SurvivorList(float H)
         {
             var ranking = Sim.Ranking();
-            const float x = 16, w = 340, rowH = 36, top = 190, bottom = 40;
+            const float x = 16, w = 390, rowH = 36, top = 190, bottom = 40;
             float maxRows = Mathf.Floor((H - bottom - top) / rowH);
             int rows = (int)Mathf.Min(ranking.Count, maxRows);
             float y0 = Mathf.Max(top, (H - rows * rowH) / 2f + 50f);
@@ -206,12 +206,13 @@ namespace Apocalypse
                 GUI.Label(new Rect(x + 4, y + 4, 34, rowH - 14), $"<color={(i < 3 ? "#3a3233" : "#f2ebe6")}>{i + 1}</color>", wcRank);
                 var dot = gone || downed ? new Color(1, 1, 1, 0.25f) : t.color;
                 Pill(new Rect(x + 46, y + 10, 11, 11), dot);
-                string nm = Fit(t.name, wcName, 150);
-                GUI.Label(new Rect(x + 62, y, 160, rowH - 6), gone || downed ? $"<color={WcSoftHex}>{nm}</color>" : $"<color=#f6f1ee>{nm}</color>", wcName);
                 string stat = gone ? "<color=#ff8a75>沒能逃出</color>"
                     : downed ? $"<color=#ff8a75>倒地等待救援 {u.downedTimer:0}s</color>"
                     : Sim.ComboOf(u) > 0 ? $"<color={WcBeigeHex}>×{Sim.ComboOf(u) + 1}</color>" : "";
-                GUI.Label(new Rect(x + 214, y, 60, rowH - 6), stat, new GUIStyle(wcSmall) { fontSize = 13 });
+                string nm = Fit(t.name, wcName, stat.Length > 0 ? 120 : 160);
+                GUI.Label(new Rect(x + 62, y, 170, rowH - 6), gone || downed ? $"<color={WcSoftHex}>{nm}</color>" : $"<color=#f6f1ee>{nm}</color>", wcName);
+                // 狀態靠右、貼在分數左邊，字再長也不會蓋到分數
+                GUI.Label(new Rect(x + w - 92 - 126, y, 120, rowH - 6), stat, new GUIStyle(wcSmall) { fontSize = 13, alignment = TextAnchor.MiddleRight });
                 GUI.Label(new Rect(x + w - 92, y, 80, rowH - 6), $"<color={WcBeigeHex}>{t.Score}</color>", wcScore);
             }
         }
