@@ -26,14 +26,17 @@ namespace Apocalypse
         {
             [NodeType.Hospital] = new Color(0.92f, 0.18f, 0.22f), [NodeType.Supply] = new Color(0.2f, 0.75f, 0.35f),
             [NodeType.Factory] = new Color(1f, 0.55f, 0.1f), [NodeType.Generator] = new Color(1f, 0.85f, 0.1f),
-            [NodeType.Armory] = new Color(0.62f, 0.2f, 0.85f),
+            [NodeType.Armory] = new Color(0.62f, 0.2f, 0.85f), [NodeType.Shelter] = new Color(0.18f, 0.6f, 0.95f),
         };
 
-        void Marker(Node n, Vector2 fp)
+        void Marker(Node n, Vector2 fp, bool groundRing = true)
         {
             if (!MarkerColors.TryGetValue(n.type, out var c)) return;
-            var ring = Flat(mapRoot, circle, new Color(c.r, c.g, c.b, 0.35f), 3.4f, 8, 0.03f);
-            ring.transform.position = W(fp, 0.03f);
+            if (groundRing)
+            {
+                var ring = Flat(mapRoot, circle, new Color(c.r, c.g, c.b, 0.35f), 3.4f, 8, 0.03f);
+                ring.transform.position = W(fp, 0.03f);
+            }
             var g = new GameObject("marker").transform;
             g.SetParent(mapRoot, false);
             var top = W(fp, 3.3f);
@@ -51,10 +54,29 @@ namespace Apocalypse
                     Part(g, PrimitiveType.Cube, white, front, new Vector3(0.55f, 0.16f, 0.02f), default, true);
                     Part(g, PrimitiveType.Cube, white, front, new Vector3(0.16f, 0.55f, 0.02f), default, true);
                     break;
-                case NodeType.Generator:
-                    Part(g, PrimitiveType.Cube, new Color(0.12f, 0.12f, 0.12f), front + new Vector3(0.06f, 0.12f, 0), new Vector3(0.12f, 0.36f, 0.02f), new Vector3(0, 0, -28f), true);
-                    Part(g, PrimitiveType.Cube, new Color(0.12f, 0.12f, 0.12f), front + new Vector3(-0.06f, -0.12f, 0), new Vector3(0.12f, 0.36f, 0.02f), new Vector3(0, 0, -28f), true);
+                case NodeType.Shelter:
+                {
+                    // 撤離點：停機坪的 H
+                    string[] h = { "#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#" };
+                    const float px = 0.08f;
+                    for (int row = 0; row < h.Length; row++)
+                        for (int col = 0; col < h[row].Length; col++)
+                            if (h[row][col] == '#')
+                                Part(g, PrimitiveType.Cube, white, front + new Vector3((col - 2f) * px, (3f - row) * px, 0), new Vector3(px, px, 0.02f), default, true);
                     break;
+                }
+                case NodeType.Generator:
+                {
+                    // 像素閃電，一格一個小方塊
+                    string[] bolt = { "...####", "..####.", ".####..", "#######", "...###.", "..###..", ".##....", "##....." };
+                    const float px = 0.075f;
+                    for (int row = 0; row < bolt.Length; row++)
+                        for (int col = 0; col < bolt[row].Length; col++)
+                            if (bolt[row][col] == '#')
+                                Part(g, PrimitiveType.Cube, new Color(0.12f, 0.12f, 0.12f),
+                                     front + new Vector3((col - 3f) * px, (3.5f - row) * px, 0), new Vector3(px, px, 0.02f), default, true);
+                    break;
+                }
                 case NodeType.Factory:
                     Part(g, PrimitiveType.Cylinder, new Color(0.15f, 0.12f, 0.1f), front, new Vector3(0.42f, 0.02f, 0.42f), new Vector3(90f, 0, 0), true);
                     for (int i = 0; i < 6; i++)
@@ -391,4 +413,4 @@ namespace Apocalypse
             }
         }
     }
-}
+}

@@ -444,6 +444,7 @@ namespace Apocalypse
                 root.localScale = Vector3.one * 1.25f;
                 Marker(n, fp);
             }
+            else if (gm.cfg.escape && n.id == Sim.extraction) Marker(n, FacilityPos(n.id), false);
         }
 
         void LateUpdate()
