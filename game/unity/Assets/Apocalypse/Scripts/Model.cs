@@ -103,6 +103,7 @@ namespace Apocalypse
 
         public PlayerState state;
         public float downedTimer;
+        public bool doomed;   // 倒地當下（倒地前的位置）在安全區外：沒人救就出局
         public float eliminatedAt = -1f;
         public string eliminatedReason = "";
 

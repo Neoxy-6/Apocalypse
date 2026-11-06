@@ -1272,7 +1272,7 @@ namespace Apocalypse
                 p.downedTimer -= dt;
                 if (p.downedTimer <= 0)
                 {
-                    if (Doomed(p)) Eliminate(p, p.eliminatedReason == "" ? "無人救援" : p.eliminatedReason);
+                    if (p.doomed) Eliminate(p, p.eliminatedReason == "" ? "無人救援" : p.eliminatedReason);
                     else Respawn(p);
                 }
                 return;
@@ -1597,6 +1597,7 @@ namespace Apocalypse
 
         void Down(Player p, string reason)
         {
+            p.doomed = Doomed(p);
             if (p.nextNode >= 0 && p.progress > 0.5f) p.node = p.nextNode;
             p.nextNode = -1; p.progress = 0;
             p.pos = map.nodes[p.node].pos;
@@ -1619,7 +1620,7 @@ namespace Apocalypse
             p.combo = 0; p.lastScoreAt = -999f;
             cityInfection += 1f;
             p.eliminatedReason = reason;
-            if (Doomed(p)) Log("down", $"{p.name} 在安全區外倒地！{cfg.downedTime:0} 秒內無人救援將無法逃出", p.node);
+            if (p.doomed) Log("down", $"{p.name} 在安全區外倒地！{cfg.downedTime:0} 秒內無人救援將無法逃出", p.node);
             else Log("down", $"{p.name} 倒地（{reason}）！貨物掉落、扣 {penalty} 分。{cfg.downedTime:0} 秒內可由隊友救起（救援者 +{cfg.reviveBonus} 分），逾時將自動返回撤離點復活", p.node);
         }
 

@@ -495,6 +495,7 @@ class Player:
         self.node, self.next_node, self.progress, self.pos = 0, -1, 0.0, (0.0, 0.0)
         self.hp, self.infection, self.cargo, self.medkits = 100.0, 0.0, [], 0
         self.state, self.downed_timer, self.eliminated_at, self.eliminated_reason = "active", 0.0, -1.0, ""
+        self.doomed = False
         self.score = self.delivered = self.rescued = self.revives = self.downs = 0
         self.evacuated = False
         self.city_reduced = 0.0
@@ -1650,7 +1651,7 @@ class Sim:
         if p.state == "downed":
             p.downed_timer -= dt
             if p.downed_timer <= 0:
-                if self.doomed(p):
+                if p.doomed:
                     self._eliminate(p, p.eliminated_reason or "無人救援")
                 else:
                     self._respawn(p)
@@ -1932,6 +1933,7 @@ class Sim:
 
     def _down(self, p, reason):
         c = self.cfg
+        p.doomed = self.doomed(p)
         if p.next_node >= 0 and p.progress > 0.5:
             p.node = p.next_node
         p.next_node, p.progress = -1, 0.0
@@ -1951,7 +1953,7 @@ class Sim:
         p.combo, p.last_score_at = 0, -999.0
         self.city_infection += 1
         p.eliminated_reason = reason
-        if self.doomed(p):
+        if p.doomed:
             self.log("down", f"{p.name} 在安全區外倒地！{c['downedTime']:.0f} 秒內無人救援將無法逃出", p.node)
         else:
             self.log("down", f"{p.name} 倒地（{reason}）！貨物掉落、扣 {penalty} 分。{c['downedTime']:.0f} 秒內可由隊友救起（救援者 +{c['reviveBonus']} 分），逾時將自動返回撤離點復活", p.node)
