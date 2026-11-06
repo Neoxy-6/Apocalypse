@@ -60,15 +60,15 @@ namespace Apocalypse
 
         public float stunTime = 40f;
 
-        public float partWeightReward = 12f, rescueRewardMul = 2f, incidentRewardMul = 2f;
-        public float partDecay = 80f;
-        public float comboWindow = 25f;
-        public int comboStep = 10, comboMax = 5;
+        public float partWeightReward = 12f, rescueRewardMul = 2f, incidentRewardMul = 1f;
+        public float partDecay = 0f;
+        public float comboWindow = 5f;
+        public int comboStep = 10, comboMax = 8;
         public float difficulty = 1.2f;
         public float earliestDepart = 480f;
         public float departDelay = 60f;
-        public int escapeBonus = 200;
-        public float earlyBonusPerSec = 1f;
+        public int escapeBonus = 100;
+        public float earlyBonusPerSec = 0.5f;
         public float zoneStart = 90f, zoneEnd = 540f, zoneMinRadius = 7f;
         public float zoneDamage = 3f, zoneInfection = 1f;
 
@@ -95,7 +95,7 @@ namespace Apocalypse
         public int weaponWeight = 4, weaponShots = 8, weaponStock = 2, killReward = 5;
         public float weaponRange = 3.5f, weaponInterval = 1.2f;
         public float downedTime = 15f;
-        public int respawnPenalty = 50;
+        public int respawnPenalty = 15;
         public float respawnHp = 70f;
         public int survivalBonus = 120;
         public int reviveBonus = 60;

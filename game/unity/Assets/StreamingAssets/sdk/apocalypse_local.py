@@ -16,13 +16,13 @@ DEFAULTS = dict(
     batchChance=0.6, batchMin=3, batchMax=5, batchBonusRatio=1.0, taskInterval=9.0, announceLead=30.0,
     seed=42, matchDuration=600.0, randomBots=0, greedyBots=0, botReactionTime=1.0,
     planCooldown=15.0, maxPlanSteps=200, capacity=10, playerSpeed=3.0, loadSpeedPenalty=0.05, fuelWeight=4, weaponWeight=4, weaponShots=8, weaponStock=2, killReward=5, weaponRange=3.5, weaponInterval=1.2,
-    downedTime=15.0, survivalBonus=120, reviveBonus=60, respawnPenalty=50, respawnHp=70.0,
+    downedTime=15.0, survivalBonus=120, reviveBonus=60, respawnPenalty=15, respawnHp=70.0,
     cityRate=0.55, spreadAmount=0.15, spreadGrow=0.02,
 
     coop=True, coopCityRate=1.35, cityPerPlayer=0.02, cityPerPoint=0.03, classBonus=200, urgentFailCity=3.0, rescueFailCity=2.0,
     coopTaskPlayers=3.0,
 
-    escape=True, partsBase=0.0, partsPerPlayer=7.0, partsCrowding=0.15, difficulty=1.2, earliestDepart=480.0, departDelay=60.0, escapeBonus=200, earlyBonusPerSec=1.0,
+    escape=True, partsBase=0.0, partsPerPlayer=7.0, partsCrowding=0.15, difficulty=1.2, earliestDepart=480.0, departDelay=60.0, escapeBonus=100, earlyBonusPerSec=0.5,
     zoneStart=90.0, zoneEnd=540.0, zoneMinRadius=7.0, zoneDamage=3.0, zoneInfection=1.0,
 
     incidentInterval=30.0, roadblockInterval=45.0, roadblockTime=60.0, civilianZombies=1, civiliansPerPlayer=2.5, trappedCivilians=4, generatorWeight=0.04, generatorCooldown=90.0, speedBoost=1.2, speedBoostTime=60.0, guardDownTime=60.0,
@@ -32,10 +32,10 @@ DEFAULTS = dict(
 
     stunTime=40.0,
 
-    partWeightReward=12.0, rescueRewardMul=2.0, incidentRewardMul=2.0,
+    partWeightReward=12.0, rescueRewardMul=2.0, incidentRewardMul=1.0,
 
-    partDecay=80.0,
-    comboWindow=25.0, comboStep=10, comboMax=5,
+    partDecay=0.0,
+    comboWindow=5.0, comboStep=10, comboMax=8,
     zombieSpeed=1.4, zombieSpeedPerPhase=0.2, zombieSight=5.5, zombieAttackRange=0.9,
     zombieDamage=5.5, zombieInfection=2.5, zombieChaseMul=1.25, zombieCapBase=6.0, zombieCapGrowth=40.0, zombieSpawnMul=1.6,
     actionNoiseRadius=10.0, actionNoiseDuration=12.0, survivorNoiseRadius=8.0, screamRadius=12.0,
@@ -1371,7 +1371,7 @@ class Sim:
         gap = self.time - p.last_score_at
         if gap > c["comboWindow"]:
             p.combo = 0
-        elif gap >= 2.0:
+        else:
             p.combo = min(c["comboMax"], p.combo + 1)
         p.last_score_at = self.time
         if p.combo != prev and p.combo in (2, c["comboMax"]):

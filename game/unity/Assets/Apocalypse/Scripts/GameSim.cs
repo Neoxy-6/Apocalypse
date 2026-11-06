@@ -690,7 +690,7 @@ namespace Apocalypse
             int prev = p.combo;
             float gap = time - p.lastScoreAt;
             if (gap > cfg.comboWindow) p.combo = 0;
-            else if (gap >= 2f) p.combo = Mathf.Min(cfg.comboMax, p.combo + 1);
+            else p.combo = Mathf.Min(cfg.comboMax, p.combo + 1);
             p.lastScoreAt = time;
             if (p.combo != prev && (p.combo == 2 || p.combo == cfg.comboMax))
                 Log("combo", $"{p.name} 連續得分 {p.combo + 1} 次！", p.node);
