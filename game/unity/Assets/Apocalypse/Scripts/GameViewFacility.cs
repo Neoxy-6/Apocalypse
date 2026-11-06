@@ -39,7 +39,7 @@ namespace Apocalypse
             }
             var g = new GameObject("marker").transform;
             g.SetParent(mapRoot, false);
-            var top = W(fp, 3.3f);
+            var top = W(fp, 4.3f);
             g.position = top;
             g.rotation = cam.transform.rotation;
             g.localScale = Vector3.one * 1.3f;
