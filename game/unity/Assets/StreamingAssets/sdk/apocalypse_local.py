@@ -28,7 +28,7 @@ DEFAULTS = dict(
     incidentInterval=30.0, roadblockInterval=45.0, roadblockTime=60.0, civilianZombies=1, civiliansPerPlayer=2.5, trappedCivilians=4, generatorWeight=0.04, generatorCooldown=90.0, speedBoost=1.2, speedBoostTime=60.0, guardDownTime=60.0,
     guardRange=5.0, guardFireInterval=1.0,
 
-    fuelPerPlayer=0.6, fuelSpare=4, fuelSparePerPlayer=0.3, fuelReward=80, boardTime=45.0,
+    fuelPerPlayer=0.6, fuelSpare=4, fuelSparePerPlayer=0.3, fuelReward=80, boardTime=45.0, repairEarliest=0.62,
 
     stunTime=40.0,
 
@@ -683,6 +683,8 @@ class Sim:
                 nd.weapons = c["weaponStock"]
         self.player_shots = []
         self.parts, self.parts_required, self.ready_at, self.depart_at = 0, 0, -1.0, -1.0
+        self.assembling = False
+        self.assemble_at = -1.0
         self.guard_kills = 0
         self.guard_cooldown, self.guard_shots = 0.0, []
         self.incidents: list[Incident] = []
@@ -837,9 +839,24 @@ class Sim:
         elif self.players and all(p.state == "eliminated" for p in self.players):
             self.end("所有傭兵皆已淘汰")
 
+    @property
+    def repair_gate(self):
+        return _f32(np.float32(self.cfg["matchDuration"]) * np.float32(self.cfg["repairEarliest"]))
+
     def _helicopter(self):
         c = self.cfg
-        if self.ready_at < 0 and self.parts >= self.parts_required:
+        gate = self.repair_gate
+        if self.ready_at < 0 and self.parts >= self.parts_required and self.time < gate and not self.assembling:
+            self.assembling = True
+            self.assemble_at = self.time
+            for p in self.players:
+                if p.state == "active":
+                    p.hp = 100.0
+                    p.infection = min(p.infection, 30.0)
+            before = len(self.zombies)
+            self.zombies = [z for z in self.zombies if not self.in_zone(z.pos)]
+            self.log("heli", f"零件湊齊了！守軍清掉圈內 {before - len(self.zombies)} 隻殭屍，技師組裝中，再 {math.ceil(gate - self.time)} 秒修好", self.extraction)
+        if self.ready_at < 0 and self.parts >= self.parts_required and self.time >= gate:
             self.ready_at = self.time
             for p in self.players:
                 if p.state == "active":
@@ -896,7 +913,8 @@ class Sim:
     @property
     def zone_radius(self):
         c = self.cfg
-        t = self.time if self.ready_at < 0 else min(self.time, self.ready_at)
+        stop = self.assemble_at if self.assemble_at >= 0 else self.ready_at
+        t = self.time if stop < 0 else min(self.time, stop)
         z0, z1 = c["zoneStart"] * self.dscale, c["zoneEnd"] * self.dscale
         if not c["escape"] or t <= z0:
             return self.zone_max
@@ -2164,7 +2182,7 @@ class Sim:
         return dict(
             status=self.status, phase=self.phase, coop=c["coop"], class_won=self.class_won,
             escape=dict(enabled=c["escape"], extraction=self.extraction, parts=self.parts, parts_required=self.parts_required,
-                        ready_at=self.ready_at, depart_at=self.depart_at, zone_x=m.nodes[self.extraction].pos[0],
+                        ready_at=self.ready_at, repair_at=self.repair_gate, depart_at=self.depart_at, zone_x=m.nodes[self.extraction].pos[0],
                         zone_y=m.nodes[self.extraction].pos[1], zone_radius=self.zone_radius,
                         zone_damage=c["zoneDamage"], escape_bonus=c["escapeBonus"], evacuated=self.evacuated,
                         speed_boost_until=self.speed_boost_until, guard_down_until=self.guard_down_until,

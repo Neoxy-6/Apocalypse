@@ -105,7 +105,9 @@ namespace Apocalypse
             if (frac > 0.001f) Pill(new Rect(bar.x, bar.y, fw, bar.height), fill);
             if (fw > bar.height + 4) Pill(new Rect(bar.x + 12, bar.y + 6, fw - 24, 6), new Color(1, 1, 1, 0.22f));
 
-            string tag = fuelPhase ? $"油桶 {Mathf.Min(Sim.fuel, Sim.fuelRequired)} / {Sim.fuelRequired}" : $"零件 {Mathf.Min(Sim.parts, Sim.partsRequired)} / {Sim.partsRequired}";
+            string tag = fuelPhase ? $"油桶 {Mathf.Min(Sim.fuel, Sim.fuelRequired)} / {Sim.fuelRequired}"
+                       : Sim.parts >= Sim.partsRequired && Sim.partsRequired > 0 ? $"技師組裝中 {Clock(Mathf.Max(0f, Sim.RepairGate - Sim.time))}"
+                       : $"零件 {Mathf.Min(Sim.parts, Sim.partsRequired)} / {Sim.partsRequired}";
             float tw = wcTag.CalcSize(new GUIContent(tag)).x + 36;
             var tagR = new Rect(bar.x + 26, bar.yMax + 8, tw, 32);
             Pill(tagR, WcBeige);

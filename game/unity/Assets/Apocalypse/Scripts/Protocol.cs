@@ -49,7 +49,7 @@ namespace Apocalypse
     {
         public bool enabled;
         public int extraction, parts, parts_required, escape_bonus;
-        public float ready_at, depart_at, zone_x, zone_y, zone_radius, zone_damage;
+        public float ready_at, repair_at, depart_at, zone_x, zone_y, zone_radius, zone_damage;
         public int evacuated;
         public float speed_boost_until, guard_down_until, zombie_stun_until;
         public bool heli_boost;
@@ -193,7 +193,7 @@ namespace Apocalypse
                 escape = new EscapeDto
                 {
                     enabled = cfg.escape, extraction = sim.extraction, parts = sim.parts, parts_required = sim.partsRequired,
-                    ready_at = sim.readyAt, depart_at = sim.departAt, zone_x = sim.map.nodes[sim.extraction].pos.x,
+                    ready_at = sim.readyAt, repair_at = sim.RepairGate, depart_at = sim.departAt, zone_x = sim.map.nodes[sim.extraction].pos.x,
                     zone_y = sim.map.nodes[sim.extraction].pos.y, zone_radius = sim.ZoneRadius, zone_damage = cfg.zoneDamage,
                     escape_bonus = cfg.escapeBonus, evacuated = sim.evacuated, speed_boost_until = sim.speedBoostUntil,
                     guard_down_until = sim.guardDownUntil, heli_boost = sim.heliBoost, zombie_stun_until = sim.zombieStunUntil,

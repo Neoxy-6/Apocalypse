@@ -138,6 +138,10 @@ namespace Apocalypse
             }
         }
 
+        public float RepairGate => cfg.matchDuration * cfg.repairEarliest;
+        bool assembling;
+        float assembleAt = -1f;
+
         public float TimeLeft => Mathf.Max(0f, cfg.matchDuration - (ClockStopped ? departAt - cfg.boardTime : time));
         public bool ClockStopped => cfg.escape && departAt >= 0;
 
@@ -202,7 +206,7 @@ namespace Apocalypse
             foreach (var n in map.nodes) if (n.type == NodeType.Armory) n.weapons = cfg.weaponStock;
             var ex = map.nodes[extraction].pos;
             zoneMax = map.nodes.Max(n => Vector2.Distance(n.pos, ex)) + 1f;
-            parts = partsRequired = 0; readyAt = departAt = -1f; guardKills = 0; guardCooldown = 0f; guardShots.Clear(); playerShots.Clear();
+            parts = partsRequired = 0; readyAt = departAt = -1f; assembling = false; assembleAt = -1f; guardKills = 0; guardCooldown = 0f; guardShots.Clear(); playerShots.Clear();
             incidents.Clear(); evacuated = 0; speedBoostUntil = guardDownUntil = -1f; heliBoost = false;
             nextIncidentId = 0; incidentTimer = 25f; roadblockTimer = 40f; roadblockIndex = 0; lastPhase = 0; lastGeneratorBreak = -999f;
             zombieStunUntil = -1f; medevacTimer = 5f; medevacNext = 0f; medevacRolls = 0;
@@ -366,7 +370,17 @@ namespace Apocalypse
 
         void UpdateHelicopter()
         {
-            if (readyAt < 0 && parts >= partsRequired)
+            if (readyAt < 0 && parts >= partsRequired && time < RepairGate && !assembling)
+            {
+                assembling = true;
+                assembleAt = time;
+                foreach (var p in players)
+                    if (p.state == PlayerState.Active) { p.hp = 100f; p.infection = Mathf.Min(p.infection, 30f); }
+                int before = zombies.Count;
+                zombies.RemoveAll(z => InZone(z.pos));
+                Log("heli", $"零件湊齊了！守軍清掉圈內 {before - zombies.Count} 隻殭屍，技師組裝中，再 {Mathf.CeilToInt(RepairGate - time)} 秒修好", extraction);
+            }
+            if (readyAt < 0 && parts >= partsRequired && time >= RepairGate)
             {
                 readyAt = time;
                 foreach (var p in players)
@@ -419,7 +433,8 @@ namespace Apocalypse
         {
             get
             {
-                float t = readyAt < 0 ? time : Mathf.Min(time, readyAt);
+                float stop = assembleAt >= 0 ? assembleAt : readyAt;
+                float t = stop < 0 ? time : Mathf.Min(time, stop);
                 float z0 = cfg.zoneStart * DScale, z1 = cfg.zoneEnd * DScale;
                 if (!cfg.escape || t <= z0) return zoneMax;
                 float f = Mathf.Min(1f, (t - z0) / Mathf.Max(1f, z1 - z0));

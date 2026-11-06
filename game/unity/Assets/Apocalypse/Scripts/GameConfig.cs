@@ -56,6 +56,7 @@ namespace Apocalypse
         public float fuelPerPlayer = 0.6f, fuelSparePerPlayer = 0.3f;
         public int fuelSpare = 4, fuelReward = 80;
         public float boardTime = 45f;
+        public float repairEarliest = 0.62f;
 
         public float stunTime = 40f;
 

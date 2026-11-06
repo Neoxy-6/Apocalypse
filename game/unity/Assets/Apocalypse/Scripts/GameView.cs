@@ -1123,6 +1123,7 @@ namespace Apocalypse
                 int alive = Sim.players.Count(p => p.state != PlayerState.Eliminated);
                 string heli = Sim.departAt >= 0 ? $"<color={Good}>起飛倒數 {Clock(Mathf.Max(0f, Sim.departAt - Sim.time))}</color>"
                             : Sim.readyAt >= 0 ? $"<color=#ff7043>加油中</color>  <color={Muted}>存活 {alive}/{Sim.players.Count}</color>"
+                            : Sim.parts >= Sim.partsRequired && Sim.partsRequired > 0 ? $"<color=#ffd54f>技師組裝中 {Clock(Mathf.Max(0f, Sim.RepairGate - Sim.time))}</color>"
                             : $"<color={Muted}>直升機修理中</color>";
                 bool shrinking = Sim.ZoneRadius < Sim.zoneMax - 0.01f;
                 string zone = shrinking ? $"<color={Bad}>安全區縮小中</color>" : $"<color={Muted}>安全區 {Clock(gm.cfg.zoneStart * gm.cfg.matchDuration / 600f - Sim.time)} 後縮小</color>";
@@ -1155,7 +1156,9 @@ namespace Apocalypse
 
             if (gm.cfg.escape)
             {
-                string heliText = Sim.departAt >= 0 ? $"<color=#a5d6a7>直升機 {Clock(Mathf.Max(0f, Sim.departAt - Sim.time))} 後起飛！</color>" : "<color=#aaa>修好直升機才能逃</color>";
+                string heliText = Sim.departAt >= 0 ? $"<color=#a5d6a7>直升機 {Clock(Mathf.Max(0f, Sim.departAt - Sim.time))} 後起飛！</color>"
+                                : Sim.readyAt < 0 && Sim.parts >= Sim.partsRequired && Sim.partsRequired > 0 ? $"<color=#ffd54f>技師組裝中 {Clock(Mathf.Max(0f, Sim.RepairGate - Sim.time))}</color>"
+                                : "<color=#aaa>修好直升機才能逃</color>";
                 GUI.Label(new Rect(r.x + 330, r.y + 6, 400, 24), $"零件  <b>{Mathf.Min(Sim.parts, Sim.partsRequired)} / {Sim.partsRequired}</b>   {heliText}", label);
                 Bar(new Rect(r.x + 330, r.y + 38, 380, 14), Sim.partsRequired > 0 ? (float)Sim.parts / Sim.partsRequired : 0f,
                     Sim.departAt >= 0 ? new Color(0.4f, 0.85f, 0.4f) : new Color(1f, 0.75f, 0.2f));
