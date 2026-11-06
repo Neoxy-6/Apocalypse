@@ -94,7 +94,6 @@ namespace Apocalypse
             cam.allowHDR = false;
             LoadSavedUrl();
             cam.gameObject.AddComponent<BloomFx>();
-            if (gm.cfg.pixelHeight > 0) cam.gameObject.AddComponent<PixelFx>().height = gm.cfg.pixelHeight;
 
             foreach (var l in FindObjectsByType<Light>()) l.enabled = false;
             var sun = new GameObject("Sun").AddComponent<Light>();
@@ -172,12 +171,11 @@ namespace Apocalypse
         {
             if (litBase == null)
                 litBase = Resources.Load<Material>("ApocalypseLit") ?? new Material(Shader.Find("Standard"));
-            var go = GameObject.CreatePrimitive(type);
-            Destroy(go.GetComponent<Collider>());
+            var go = PixelPrimitive(type);
             go.transform.SetParent(parent, false);
             go.transform.localScale = scale;
             var r = go.GetComponent<Renderer>();
-            r.sharedMaterial = litBase;
+            r.sharedMaterial = PixelBase();
             r.material.color = c;
             return go;
         }

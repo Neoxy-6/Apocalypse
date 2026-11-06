@@ -23,7 +23,7 @@ namespace Apocalypse
             int k = ColorKey(c);
             if (litCache.TryGetValue(k, out var m) && m != null) return m;
             if (litBase == null) litBase = Resources.Load<Material>("ApocalypseLit") ?? new Material(Shader.Find("Standard"));
-            m = new Material(litBase) { color = c, enableInstancing = true };
+            m = new Material(PixelBase()) { color = c };
             litCache[k] = m;
             return m;
         }
@@ -39,8 +39,7 @@ namespace Apocalypse
 
         GameObject Part(Transform parent, PrimitiveType type, Color c, Vector3 localPos, Vector3 scale, Vector3 euler = default, bool unlit = false)
         {
-            var go = GameObject.CreatePrimitive(type);
-            Destroy(go.GetComponent<Collider>());
+            var go = PixelPrimitive(type);
             go.transform.SetParent(parent, false);
             go.transform.localPosition = localPos;
             go.transform.localRotation = Quaternion.Euler(euler);
