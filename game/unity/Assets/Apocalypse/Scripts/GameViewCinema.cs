@@ -65,7 +65,7 @@ namespace Apocalypse
             director = false; follow = -1; manualTarget = null;
             lastCut = Time.unscaledTime;
         }
-        float manualSize = 10f;
+        float manualZoom = 0.37f;
         Vector3 lastMouse;
 
         void PanCamera()
@@ -88,7 +88,7 @@ namespace Apocalypse
             {
                 var look = (camBase ?? cam.transform.position) + cam.transform.forward * 120f;
                 manualTarget = new Vector2(look.x, look.z);
-                manualSize = cam.orthographicSize / Mathf.Max(0.01f, zoomMul);
+                manualZoom = cam.orthographicSize / overviewSize;
             }
             director = false; follow = -1; focusIncident = -1;
             var right = cam.transform.right; var up = cam.transform.up;

@@ -64,12 +64,12 @@ namespace Apocalypse
         }
 
         // 鏡頭拉越近，一般建築越透明，近到一定程度就完全看不到。設施、橋、直升機坪不受影響。
-        const float FadeOpaqueSize = 15f, FadeGoneSize = 6f;
+        const float FadeOpaque = 0.56f, FadeGone = 0.22f;
 
         void UpdateOcclusion()
         {
             if (galleryMode) { UpdateGalleryOcclusion(); return; }
-            float a = galleryNoFade ? 1f : Mathf.InverseLerp(FadeGoneSize, FadeOpaqueSize, cam.orthographicSize);
+            float a = galleryNoFade ? 1f : Mathf.InverseLerp(FadeGone * overviewSize, FadeOpaque * overviewSize, cam.orthographicSize);
             if (mpb == null) mpb = new MaterialPropertyBlock();
             foreach (var g in occGroups)
             {
@@ -110,7 +110,7 @@ namespace Apocalypse
         void UpdateGalleryOcclusion()
         {
             float now = Time.unscaledTime;
-            bool close = !galleryNoFade && cam.orthographicSize < 8.5f;
+            bool close = !galleryNoFade && cam.orthographicSize < 0.32f * overviewSize;
             occlusionTargets.Clear();
             var back = -cam.transform.forward;
             if (galleryFocus.HasValue)

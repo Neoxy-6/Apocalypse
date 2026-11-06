@@ -64,7 +64,12 @@ namespace Apocalypse
         bool director = true;
         int directorPick = -1;
         Vector2? directorSpot;
-        float directorTimer, zoomMul = 1f;
+        float directorTimer;
+        // 鏡頭遠近都用「看到整張地圖的大小」當基準，大地圖小地圖看起來比例一樣。
+        // userZoom 是滾輪設定的遠近（整張地圖的幾成），設了之後自動導播和手動都用它，不會互相搶。
+        float? userZoom;
+        float overviewSize = 27f;
+        const float DirectorFar = 0.335f, DirectorNear = 0.28f, SpotFar = 0.317f, SpotNear = 0.26f, FollowZoom = 0.22f;
         bool clean;
 
         Font font;
@@ -775,6 +780,7 @@ namespace Apocalypse
                 minX = Mathf.Min(minX, v.x); maxX = Mathf.Max(maxX, v.x); minY = Mathf.Min(minY, v.y); maxY = Mathf.Max(maxY, v.y);
             }
             float overview = Mathf.Max((maxY - minY) / 2f * 1.18f, (maxX - minX) / 2f / Mathf.Max(0.5f, cam.aspect) * 1.25f);
+            overviewSize = overview;
 
             var right = cam.transform.right; var right2 = new Vector2(right.x, right.z).normalized;
             var up = cam.transform.up; var up2 = new Vector2(up.x, up.z).normalized;
@@ -799,16 +805,16 @@ namespace Apocalypse
                 lastFocusId = focus; lastFocusPos = fp.pos;
                 lead = Vector2.Lerp(lead, Vector2.ClampMagnitude(vel * 0.5f, 1.4f), 1f - Mathf.Exp(-2f * Time.unscaledDeltaTime));
                 target = Shown(fp) + lead;
-                size = follow >= 0 ? 6f : Mathf.Lerp(9f, 7.5f, push);
+                size = overview * (follow >= 0 ? FollowZoom : Mathf.Lerp(DirectorFar, DirectorNear, push));
             }
-            else if (follow < 0 && directorSpot.HasValue) { target = directorSpot.Value; size = Mathf.Lerp(8.5f, 7f, push); }
+            else if (follow < 0 && directorSpot.HasValue) { target = directorSpot.Value; size = overview * Mathf.Lerp(SpotFar, SpotNear, push); }
             PanCamera();
-            if (manualTarget.HasValue && follow < 0 && !director) { target = manualTarget.Value; size = manualSize; }
+            if (manualTarget.HasValue && follow < 0 && !director) { target = manualTarget.Value; size = overview * manualZoom; }
             if (focusIncident >= 0 && follow < 0 && !director)
             {
                 var fi = Sim.incidents.FirstOrDefault(i => i.id == focusIncident && i.status == "active");
-                if (fi != null) { target = Sim.map.nodes[fi.node].pos; size = 6f; }
-                else { manualTarget = Sim.map.nodes[Sim.incidents.FirstOrDefault(i => i.id == focusIncident)?.node ?? Sim.extraction].pos; manualSize = 6f; focusIncident = -1; }
+                if (fi != null) { target = Sim.map.nodes[fi.node].pos; size = overview * FollowZoom; }
+                else { manualTarget = Sim.map.nodes[Sim.incidents.FirstOrDefault(i => i.id == focusIncident)?.node ?? Sim.extraction].pos; manualZoom = FollowZoom; focusIncident = -1; }
             }
             if (camFocus != null)
             {
@@ -822,8 +828,8 @@ namespace Apocalypse
                 }
                 size = camFocusSize;
             }
+            else if (userZoom.HasValue) size = overview * userZoom.Value;
             if (galleryTarget.HasValue) { target = galleryTarget.Value; size = gallerySize; }
-            size *= zoomMul;
             ApplyCamera(target, size);
         }
 
@@ -912,7 +918,7 @@ namespace Apocalypse
         {
             if (e.type == EventType.ScrollWheel)
             {
-                zoomMul = Mathf.Clamp(zoomMul * (e.delta.y > 0 ? 1.1f : 0.9f), 0.3f, 2f);
+                userZoom = Mathf.Clamp((userZoom ?? cam.orthographicSize / overviewSize) * (e.delta.y > 0 ? 1.1f : 0.9f), 0.12f, 1.2f);
                 e.Use();
                 return;
             }
@@ -942,7 +948,7 @@ namespace Apocalypse
                     if (Screen.fullScreen) Screen.SetResolution(1600, 900, FullScreenMode.Windowed);
                     else Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, FullScreenMode.FullScreenWindow);
                     break;
-                case KeyCode.Alpha0: case KeyCode.Escape: follow = -1; director = false; zoomMul = 1f; manualTarget = null; focusIncident = -1; break;
+                case KeyCode.Alpha0: case KeyCode.Escape: follow = -1; director = false; userZoom = null; manualTarget = null; focusIncident = -1; break;
                 case KeyCode.P: gm.speed = gm.speed == 0 ? 1 : 0; break;
                 case KeyCode.Alpha1: gm.speed = 1; break;
                 case KeyCode.Alpha2: gm.speed = 2; break;
@@ -962,7 +968,7 @@ namespace Apocalypse
         void WorldLabels(float s)
         {
             var map = Sim.map;
-            bool close = cam.orthographicSize < 14f;
+            bool close = cam.orthographicSize < 0.52f * overviewSize;
 
             var byNode = TasksByNode();
             var style = CenterSmall();
