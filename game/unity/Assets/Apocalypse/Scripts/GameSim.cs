@@ -63,18 +63,18 @@ namespace Apocalypse
                 ["outbreak"] = ("感染爆發", 8f, 1, 60f, 60),
                 ["bridge"] = ("橋樑損毀", 10f, 1, 9999f, 50),
                 ["airdrop"] = ("物資空投", 4f, 1, 45f, 40),
-                ["trapped"] = ("受困人群", 20f, 2, 75f, 120),
+                ["trapped"] = ("人群受困", 20f, 2, 75f, 120),
                 ["guard"] = ("撤離點告急", 8f, 1, 50f, 60),
                 ["heli"] = ("直升機故障", 24f, 2, 60f, 80),
                 ["medevac"] = ("醫療隊抵達", 6f, 1, 50f, 80),
                 ["napalm"] = ("呼叫空襲", 8f, 1, 50f, 60),
-                ["decoy"] = ("聲波誘餌", 20f, 2, 60f, 90),
+                ["decoy"] = ("部署聲波誘餌", 20f, 2, 60f, 90),
                 ["chest"] = ("神秘寶箱", 3f, 1, 40f, 150),
                 ["boss"] = ("殭屍王", 30f, 3, 75f, 200),
 
                 ["herbs"] = ("草藥採集", 6f, 1, 50f, 70),
-                ["gas"] = ("加油站", 5f, 1, 60f, 80),
-                ["rubble"] = ("瓦礫堆", 20f, 2, 70f, 100),
+                ["gas"] = ("加油站補給", 5f, 1, 60f, 80),
+                ["rubble"] = ("瓦礫堆採集", 20f, 2, 70f, 100),
                 ["bell"] = ("教堂鐘聲", 8f, 1, 50f, 70),
 
                 ["generator"] = ("發電機故障", 15f, 1, 9999f, 60),
@@ -87,17 +87,17 @@ namespace Apocalypse
             ["airdrop"] = ("搶到了空投物資!", "空投物資被搶走了..."),
             ["trapped"] = ("救出了受困的民眾!", "沒能救出受困的民眾..."),
             ["guard"] = ("守住了撤離點!", "撤離點失守了!"),
-            ["heli"] = ("排除了直升機故障!", "直升機故障沒排除!"),
+            ["heli"] = ("成功修復直升機故障!", "直升機故障修復失敗!"),
             ["medevac"] = ("接應到醫療隊!", "沒接應到醫療隊..."),
             ["napalm"] = ("呼叫的空襲命中了!", "空襲沒呼叫成功..."),
             ["decoy"] = ("啟動了聲波誘餌!", "聲波誘餌沒啟動..."),
             ["chest"] = ("打開了神秘寶箱!", "沒搶到神秘寶箱..."),
             ["boss"] = ("打倒了殭屍王!", "殭屍王沒被打倒..."),
             ["herbs"] = ("採到了草藥!", "草藥沒採集到..."),
-            ["gas"] = ("裝滿了油桶!", "加油站的油被搶光了..."),
-            ["rubble"] = ("挖開了瓦礫堆!", "瓦礫堆沒挖開!"),
-            ["bell"] = ("敲響了教堂的鐘!", "教堂的鐘沒敲響!"),
-            ["generator"] = ("修好了發電機!", "發電機沒修好"),
+            ["gas"] = ("成功取得加油站的備用燃油!", "加油站的油被搶光了..."),
+            ["rubble"] = ("挖開了瓦礫堆!", "瓦礫堆沒挖開..."),
+            ["bell"] = ("敲響了教堂的鐘!", "教堂的鐘沒敲響..."),
+            ["generator"] = ("修好了發電機!", "發電機沒修好..."),
         };
 
         public static readonly string[] Districts = { "jungle", "city", "ruins", "town" };
@@ -296,7 +296,7 @@ namespace Apocalypse
             }
             for (int i = 0; i < Mathf.RoundToInt(6 * map.Scale * SquadTaskScale); i++) { UseStream(StreamTask, taskSlot++); SpawnTask(false, 0f); }
             for (int i = 0; i < Mathf.RoundToInt(2 * map.Scale); i++) { UseStream(StreamZombie, zombieSpawnIndex++); SpawnZombieAtInfected(); }
-            Log("system", cfg.escape ? $"比賽開始! 共 {players.Count} 位玩家，{cfg.matchDuration / 60f:0.#} 分鐘內修好直升機逃出去!"
+            Log("system", cfg.escape ? $"比賽開始！共 {players.Count} 位玩家，需在 {cfg.matchDuration / 60f:0.#} 分鐘內修好直升機並加滿油以逃離!"
                                     : $"比賽開始！共 {players.Count} 位玩家，城市將在 {cfg.matchDuration / 60f:0.#} 分鐘後全面淪陷");
         }
 
@@ -378,7 +378,7 @@ namespace Apocalypse
                     if (p.state == PlayerState.Active) { p.hp = 100f; p.infection = Mathf.Min(p.infection, 30f); }
                 int before = zombies.Count;
                 zombies.RemoveAll(z => InZone(z.pos));
-                Log("heli", $"零件湊齊了！守軍清掉圈內 {before - zombies.Count} 隻殭屍，技師組裝中，再 {Mathf.CeilToInt(RepairGate - time)} 秒修好", extraction);
+                Log("heli", $"零件已收集完成！守軍已清除圈內 {before - zombies.Count} 隻殭屍，技師正在組裝直升機，將於 {Mathf.CeilToInt(RepairGate - time)} 秒後修好", extraction);
             }
             if (readyAt < 0 && parts >= partsRequired && time >= RepairGate)
             {
@@ -388,16 +388,16 @@ namespace Apocalypse
                 int before = zombies.Count;
                 zombies.RemoveAll(z => InZone(z.pos));
                 SpawnFuel();
-                Log("heli", $"直升機修好了！守軍清掉圈內 {before - zombies.Count} 隻殭屍，去撿回 {fuelRequired} 桶油！", extraction);
+                Log("heli", $"直升機修好了！守軍已清除圈內 {before - zombies.Count} 隻殭屍，還需撿回 {fuelRequired} 桶油才能撤離。安全區外倒地無人救援將無法復活！", extraction);
             }
             if (readyAt >= 0 && departAt < 0 && fuel >= fuelRequired)
             {
                 departAt = time + cfg.boardTime;
-                Log("heli", $"油加滿了！倒數暫停，{cfg.boardTime:0} 秒後起飛，快回撤離點！", extraction);
+                Log("heli", $"油加滿了！比賽計時已暫停，直升機將在 {cfg.boardTime:0} 秒後起飛，快回撤離點！", extraction);
             }
             if (departAt >= 0 && time >= departAt) EndMatch("直升機起飛");
-            else if (departAt < 0 && time >= cfg.matchDuration) EndMatch(readyAt < 0 ? "時間到，直升機沒修好" : "時間到，油不夠，直升機飛不起來");
-            else if (players.Count > 0 && players.All(p => p.state == PlayerState.Eliminated)) EndMatch("所有人都倒下了");
+            else if (departAt < 0 && time >= cfg.matchDuration) EndMatch(readyAt < 0 ? "時間到！直升機沒修好" : "時間到！燃油不足，直升機無法起飛");
+            else if (players.Count > 0 && players.All(p => p.state == PlayerState.Eliminated)) EndMatch("團滅！所有人都倒下了");
         }
 
         void SpawnFuel()
@@ -464,7 +464,7 @@ namespace Apocalypse
                 map.Recompute();
                 if (!map.Connected()) { e.blocked = false; map.Recompute(); continue; }
                 e.blockedUntil = time + cfg.roadblockTime * (0.75f + 0.5f * (float)rng.NextDouble());
-                Log("roadblock", $"屍潮堵住了路口 {e.a} 和 {e.b} 之間的路，{e.blockedUntil - time:0} 秒後才散開", e.a);
+                Log("roadblock", $"屍潮封鎖了路口 {e.a} 和 {e.b} 之間的道路，將於 {e.blockedUntil - time:0} 秒後散開", e.a);
                 return;
             }
         }
@@ -728,7 +728,7 @@ namespace Apocalypse
                 case "outbreak":
                     zombies.RemoveAll(z => Vector2.Distance(z.pos, pos) <= 4f);
                     map.nodes[inc.node].infection = 0f;
-                    effect = "當地殭屍清除、感染歸零!";
+                    effect = "當地殭屍已清除，感染值歸零！";
                     break;
                 case "bridge":
                     if (inc.edge >= 0 && inc.edge < map.edges.Count) map.edges[inc.edge].blockedUntil = time;
@@ -770,7 +770,7 @@ namespace Apocalypse
                 case "gas":
                     if (readyAt >= 0) fuelRequired = Mathf.Max(1, fuelRequired - 1);
                     else fuelDiscount++;
-                    effect = "之後少要 1 桶油!";
+                    effect = "直升機起飛所需油桶數 -1 !";
                     break;
                 case "rubble":
                 {
@@ -808,7 +808,7 @@ namespace Apocalypse
                     break;
                 default:
                     heliBoost = true;
-                    if (readyAt >= 0) { fuelRequired = Mathf.Max(1, fuelRequired - 1); effect = "直升機少需要 1 桶油!"; }
+                    if (readyAt >= 0) { fuelRequired = Mathf.Max(1, fuelRequired - 1); effect = "直升機起飛所需油桶數 -1 !"; }
                     else
                     {
                         int less = Mathf.Max(1, Mathf.RoundToInt(partsRequired * 0.05f));
@@ -832,7 +832,7 @@ namespace Apocalypse
                     effect = "殭屍又多了 3 隻!";
                     break;
                 case "bridge":
-                    effect = "橋要再斷 2 分鐘!";
+                    effect = "橋樑修復失敗，封鎖再延長 2 分鐘！";
                     break;
                 case "airdrop":
                     for (int i = 0; i < 2; i++) SpawnZombie(inc.node, -1);
@@ -880,7 +880,7 @@ namespace Apocalypse
                     if (readyAt >= 0)
                     {
                         fuelRequired++;
-                        effect = "油料外洩，要多撿 1 桶油!";
+                        effect = "油料外洩，直升機起飛所需油桶數 +1！";
                     }
                     else
                     {
@@ -1172,7 +1172,7 @@ namespace Apocalypse
             map.Recompute();
             if (!map.Connected()) { edge.blocked = false; map.Recompute(); return; }
             edge.blockedUntil = time + 45f + (float)rng.NextDouble() * 45f;
-            Log("failure", $"有一段{(edge.bridge ? "橋" : "道路")}壞了，{edge.blockedUntil - time:0} 秒後修好");
+            Log("failure", $"{(edge.bridge ? "橋樑" : "道路")}受損，將於 {edge.blockedUntil - time:0} 秒後恢復");
         }
 
         void UpdateRestock(float dt)
@@ -1272,7 +1272,7 @@ namespace Apocalypse
                 p.downedTimer -= dt;
                 if (p.downedTimer <= 0)
                 {
-                    if (Doomed(p)) Eliminate(p, p.eliminatedReason == "" ? "沒人來救" : p.eliminatedReason);
+                    if (Doomed(p)) Eliminate(p, p.eliminatedReason == "" ? "無人救援" : p.eliminatedReason);
                     else Respawn(p);
                 }
                 return;
@@ -1374,10 +1374,10 @@ namespace Apocalypse
         void DoDrop(Player p, PlanStep s)
         {
             int at = p.nextNode >= 0 && p.progress > 0.5f ? p.nextNode : p.node;
-            if (s.action == "drop_medkit") { if (p.medkits > 0) p.medkits--; else p.lastError = $"[{time:0}s] drop_medkit：沒有醫療包（已略過此步）"; return; }
-            if (s.action == "drop_weapon") { if (p.ammo > 0) p.ammo = 0; else p.lastError = $"[{time:0}s] drop_weapon：沒有武器（已略過此步）"; return; }
+            if (s.action == "drop_medkit") { if (p.medkits > 0) p.medkits--; else p.lastError = $"[{time:0}s] drop_medkit：你沒有攜帶醫療包（已略過此步）"; return; }
+            if (s.action == "drop_weapon") { if (p.ammo > 0) p.ammo = 0; else p.lastError = $"[{time:0}s] drop_weapon：你沒有攜帶武器（已略過此步）"; return; }
             var t = TaskById(s.task);
-            if (t == null || !p.cargo.Contains(s.task)) { p.lastError = $"[{time:0}s] drop：你沒有攜帶委託 #{s.task}（已略過此步）"; return; }
+            if (t == null || !p.cargo.Contains(s.task)) { p.lastError = $"[{time:0}s] drop：你沒有攜帶委託 #{s.task} 所需物品（已略過此步）"; return; }
             p.cargo.Remove(t.id);
             t.status = TaskStatus.Open; t.carrier = -1; t.origin = at;
             t.expiresAt = t.type == TaskType.Fuel ? -1f : time + 60f;
@@ -1438,7 +1438,7 @@ namespace Apocalypse
                 case "dropoff":
                 {
                     var t = TaskById(s.task);
-                    if (t == null || !p.cargo.Contains(s.task)) return $"dropoff：你沒有攜帶委託 #{s.task}";
+                    if (t == null || !p.cargo.Contains(s.task)) return $"dropoff：你沒有攜帶委託 #{s.task} 所需物品";
                     if (t.dest != p.node) return $"dropoff：委託 #{s.task} 目的地是 {t.dest}，你在 {p.node}";
                     return null;
                 }
@@ -1449,8 +1449,8 @@ namespace Apocalypse
                     return null;
                 case "take_weapon":
                     if (node.type != NodeType.Armory) return "take_weapon：這裡不是軍火庫";
-                    if (node.weapons <= 0) return "take_weapon：軍火庫沒有武器了";
-                    if (p.ammo > 0) return "take_weapon：你已經有武器了";
+                    if (node.weapons <= 0) return "take_weapon：軍火庫已無武器";
+                    if (p.ammo > 0) return "take_weapon：你已持有武器";
                     if (Load(p) + cfg.weaponWeight > cfg.capacity) return "take_weapon：背包容量不足";
                     return null;
                 case "use_medkit":
@@ -1619,8 +1619,8 @@ namespace Apocalypse
             p.combo = 0; p.lastScoreAt = -999f;
             cityInfection += 1f;
             p.eliminatedReason = reason;
-            if (Doomed(p)) Log("down", $"{p.name} 在安全區外倒地了！{cfg.downedTime:0} 秒內沒人來救就逃不掉了", p.node);
-            else Log("down", $"{p.name} 倒地（{reason}），掉落貨物、扣 {penalty} 分，{cfg.downedTime:0} 秒內有人來救 +{cfg.reviveBonus}，不然回撤離點復活", p.node);
+            if (Doomed(p)) Log("down", $"{p.name} 在安全區外倒地！{cfg.downedTime:0} 秒內無人救援將無法逃出", p.node);
+            else Log("down", $"{p.name} 倒地（{reason}）！貨物掉落、扣 {penalty} 分。{cfg.downedTime:0} 秒內可由隊友救起（救援者 +{cfg.reviveBonus} 分），逾時將自動返回撤離點復活", p.node);
         }
 
         void Eliminate(Player p, string reason)

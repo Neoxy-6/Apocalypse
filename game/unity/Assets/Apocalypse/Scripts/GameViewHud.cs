@@ -105,15 +105,15 @@ namespace Apocalypse
             if (frac > 0.001f) Pill(new Rect(bar.x, bar.y, fw, bar.height), fill);
             if (fw > bar.height + 4) Pill(new Rect(bar.x + 12, bar.y + 6, fw - 24, 6), new Color(1, 1, 1, 0.22f));
 
-            string tag = fuelPhase ? $"油桶 {Mathf.Min(Sim.fuel, Sim.fuelRequired)} / {Sim.fuelRequired}"
-                       : Sim.parts >= Sim.partsRequired && Sim.partsRequired > 0 ? $"技師組裝中 {Clock(Mathf.Max(0f, Sim.RepairGate - Sim.time))}"
-                       : $"零件 {Mathf.Min(Sim.parts, Sim.partsRequired)} / {Sim.partsRequired}";
+            string tag = fuelPhase ? $"油桶 {Mathf.Min(Sim.fuel, Sim.fuelRequired)}/{Sim.fuelRequired}"
+                       : Sim.parts >= Sim.partsRequired && Sim.partsRequired > 0 ? $"直升機組裝中 {Clock(Mathf.Max(0f, Sim.RepairGate - Sim.time))}"
+                       : $"零件 {Mathf.Min(Sim.parts, Sim.partsRequired)}/{Sim.partsRequired}";
             float tw = wcTag.CalcSize(new GUIContent(tag)).x + 36;
             var tagR = new Rect(bar.x + 26, bar.yMax + 8, tw, 32);
             Pill(tagR, WcBeige);
             GUI.Label(tagR, $"<color=#3a3233>{tag}</color>", wcTag);
             if (fuelPhase)
-                GUI.Label(new Rect(tagR.xMax + 14, tagR.y + 2, 400, 28), "<color=#ff8a75>安全區外倒地就無法復活</color>", wcSmall);
+                GUI.Label(new Rect(tagR.xMax + 14, tagR.y + 2, 400, 28), "<color=#ff8a75>安全區外倒地無人救援將無法復活</color>", wcSmall);
 
             string clock = Clock(Sim.TimeLeft);
             int lead = 0;
@@ -126,12 +126,12 @@ namespace Apocalypse
             InfectionDial(new Rect(W - 24 - clockW - 92, 10, 70, 70), Sim.cityInfection / 100f);
 
             GUI.Label(new Rect(W - 600, 90, 582, 34),
-                      $"<color={WcBeigeHex}>{GameSim.PhaseNames[Sim.Phase]}</color><color={WcSoftHex}>　·　</color><color=#c9e3a8>殭屍數量 {Sim.zombies.Count}</color>",
+                      $"<color={WcBeigeHex}>{GameSim.PhaseNames[Sim.Phase]}</color><color={WcSoftHex}> · </color><color=#c9e3a8>現存殭屍 {Sim.zombies.Count}</color>",
                       new GUIStyle(wcSmall) { alignment = TextAnchor.MiddleRight, fontSize = 20 });
             GoalBar(new Vector2(bar.x + 26, bar.yMax + 48), fuelPhase, frac);
             string buffs = "";
             if (Sim.time < Sim.speedBoostUntil) buffs += $"<color=#9be7b0>全員加速 {Clock(Sim.speedBoostUntil - Sim.time)}</color>   ";
-            if (Sim.time < Sim.zombieStunUntil) buffs += $"<color=#c7b3ff>殭屍呆住 {Clock(Sim.zombieStunUntil - Sim.time)}</color>   ";
+            if (Sim.time < Sim.zombieStunUntil) buffs += $"<color=#c7b3ff>殭屍僵直 {Clock(Sim.zombieStunUntil - Sim.time)}</color>   ";
             if (Sim.time < Sim.guardDownUntil) buffs += $"<color=#ff8a75>守衛倒下 {Clock(Sim.guardDownUntil - Sim.time)}</color>   ";
             if (buffs != "") GUI.Label(new Rect(W - 600, 128, 582, 28), buffs, new GUIStyle(wcSmall) { alignment = TextAnchor.MiddleRight, fontSize = 16 });
 
@@ -143,14 +143,14 @@ namespace Apocalypse
         {
             string goal = Sim.departAt >= 0 ? $"<color=#9be7b0>起飛倒數 {Clock(Mathf.Max(0f, Sim.departAt - Sim.time))}</color>"
                         : fuelPhase ? $"<color=#ffb59c>收集油桶 {Mathf.Min(Sim.fuel, Sim.fuelRequired)}/{Sim.fuelRequired}</color>"
-                        : $"<color=#f6f1ee>修理直升機 {Mathf.FloorToInt(frac * 100)}%</color>";
+                        : $"<color=#f6f1ee>直升機修理進度 {Mathf.FloorToInt(frac * 100)}%</color>";
             if (!fuelPhase)
             {
                 var gens = Sim.Generators.ToList();
                 int on = gens.Count(g => g.powered);
                 if (gens.Count > 0)
                     goal += on == gens.Count ? $"<color={WcSoftHex}>　·　</color><color=#9be7b0>發電機 {on}/{gens.Count} 運轉</color>"
-                          : $"<color={WcSoftHex}>　·　</color><color=#ff8a75>發電機 {on}/{gens.Count} 運轉，修好工廠才會出零件</color>";
+                          : $"<color={WcSoftHex}>　·　</color><color=#ff8a75>發電機 {on}/{gens.Count} 運轉，故障區工廠已停止生產零件</color>";
             }
             var st = new GUIStyle(wcName) { fontSize = 18 };
             var tagSt = new GUIStyle(wcTag) { fontSize = 14 };
@@ -209,7 +209,7 @@ namespace Apocalypse
                 string nm = Fit(t.name, wcName, 150);
                 GUI.Label(new Rect(x + 62, y, 160, rowH - 6), gone || downed ? $"<color={WcSoftHex}>{nm}</color>" : $"<color=#f6f1ee>{nm}</color>", wcName);
                 string stat = gone ? "<color=#ff8a75>沒能逃出</color>"
-                    : downed ? $"<color=#ff8a75>倒地 {u.downedTimer:0}s</color>"
+                    : downed ? $"<color=#ff8a75>倒地等待救援 {u.downedTimer:0}s</color>"
                     : Sim.ComboOf(u) > 0 ? $"<color={WcBeigeHex}>×{Sim.ComboOf(u) + 1}</color>" : "";
                 GUI.Label(new Rect(x + 214, y, 60, rowH - 6), stat, new GUIStyle(wcSmall) { fontSize = 13 });
                 GUI.Label(new Rect(x + w - 92, y, 80, rowH - 6), $"<color={WcBeigeHex}>{t.Score}</color>", wcScore);

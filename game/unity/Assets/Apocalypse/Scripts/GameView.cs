@@ -753,7 +753,7 @@ namespace Apocalypse
             void Add(string text, string color) => banners.Add(new Banner { text = text, color = color, until = Time.unscaledTime + 3.5f });
             int pct = Sim.parts * 100 / Sim.partsRequired;
             foreach (int m in new[] { 25, 50, 75 })
-                if (pct >= m && partsMilestone < m && Sim.readyAt < 0) { partsMilestone = m; Add($"零件完成 {m}%！", Gold); }
+                if (pct >= m && partsMilestone < m && Sim.readyAt < 0) { partsMilestone = m; Add($"零件已收集 {m}%！", Gold); }
             if (!zoneAnnounced && Sim.ZoneRadius < Sim.zoneMax - 0.01f) { zoneAnnounced = true; Add("安全區開始縮小！", Bad); }
 
             if (Sim.departAt >= 0)
@@ -973,13 +973,13 @@ namespace Apocalypse
                 {
                     case NodeType.Shelter: lines.Add($"<b>{(n.id == map.startNode ? "總部避難所" : "避難所")}</b>"); break;
                     case NodeType.Hospital: lines.Add("<b>醫院</b>"); break;
-                    case NodeType.Supply: lines.Add(n.medkits > 0 ? $"<b>補給站</b> 醫療包×{n.medkits}" : "<b>補給站</b> <color=#999>（空）</color>"); break;
+                    case NodeType.Supply: lines.Add(n.medkits > 0 ? $"<b>補給站</b> 剩餘醫療包{n.medkits}" : "<b>補給站</b> <color=#999>（空）</color>"); break;
                     case NodeType.Factory: lines.Add(Sim.Powered(n) ? "<b>工廠</b>" : "<b>工廠</b> <color=#999>（停電）</color>"); break;
                     case NodeType.Generator: lines.Add(Sim.Powered(n) ? "<b>發電機</b> <color=#9be7b0>運轉中</color>" : "<b>發電機</b> <color=#ff8a75>故障</color>"); break;
                 }
                 if (gm.cfg.escape && n.id == Sim.extraction) { lines.Clear(); lines.Add("<color=#ffd54f><b>撤離點</b></color>"); }
                 if (byNode.TryGetValue(n.id, out var here)) lines.AddRange(PileSummary(here));
-                if (!close) lines.RemoveAll(l => l.Contains("公告×"));
+                if (!close) lines.RemoveAll(l => l.Contains("後開放）"));
                 if (gm.cfg.escape && !close)
                     lines.RemoveAll(l => !l.Contains("撤離點") && !l.Contains("油桶×") && !l.Contains("故障"));
                 if (!clean && close) lines.Add($"<color=#666>#{n.id}</color>");
@@ -1044,7 +1044,7 @@ namespace Apocalypse
             }
             var urgent = list.Where(t => t.urgent && t.status == TaskStatus.Open).ToList();
             if (urgent.Count > 0)
-                lines.Add($"<color=#ffeb3b>限時×{urgent.Count} +{urgent.Max(t => t.reward + t.bonus)} 剩{Clock(urgent.Min(t => t.deadline) - Sim.time)}</color>");
+                lines.Add($"<color=#ffeb3b>委託×{urgent.Count} 最高+{urgent.Max(t => t.reward + t.bonus)} 限時獎勵剩{Clock(urgent.Min(t => t.deadline) - Sim.time)}</color>");
             var fuelList = list.Where(t => t.type == TaskType.Fuel && t.status == TaskStatus.Open).ToList();
             if (fuelList.Count > 0) lines.Add($"<color=#ff7043><b>油桶×{fuelList.Count}</b></color>");
             var partList = list.Where(t => !t.urgent && t.type == TaskType.Part && t.status == TaskStatus.Open).ToList();
@@ -1054,7 +1054,7 @@ namespace Apocalypse
             var rescue = list.Where(t => !t.urgent && t.type == TaskType.Rescue && t.status == TaskStatus.Open).ToList();
             if (rescue.Count > 0) lines.Add($"<color=#a5d6a7>救援×{rescue.Count} 最高+{rescue.Max(t => t.reward)}</color>");
             var soon = list.Where(t => t.status == TaskStatus.Announced).ToList();
-            if (soon.Count > 0) lines.Add($"<color=#999>公告×{soon.Count}（{soon.Min(t => t.availableAt) - Sim.time:0}s 後開放）</color>");
+            if (soon.Count > 0) lines.Add($"<color=#999>委託×{soon.Count}（{soon.Min(t => t.availableAt) - Sim.time:0}s 後開放）</color>");
             return lines;
         }
 
@@ -1123,7 +1123,7 @@ namespace Apocalypse
                 int alive = Sim.players.Count(p => p.state != PlayerState.Eliminated);
                 string heli = Sim.departAt >= 0 ? $"<color={Good}>起飛倒數 {Clock(Mathf.Max(0f, Sim.departAt - Sim.time))}</color>"
                             : Sim.readyAt >= 0 ? $"<color=#ff7043>加油中</color>  <color={Muted}>存活 {alive}/{Sim.players.Count}</color>"
-                            : Sim.parts >= Sim.partsRequired && Sim.partsRequired > 0 ? $"<color=#ffd54f>技師組裝中 {Clock(Mathf.Max(0f, Sim.RepairGate - Sim.time))}</color>"
+                            : Sim.parts >= Sim.partsRequired && Sim.partsRequired > 0 ? $"<color=#ffd54f>直升機組裝中 {Clock(Mathf.Max(0f, Sim.RepairGate - Sim.time))}</color>"
                             : $"<color={Muted}>直升機修理中</color>";
                 bool shrinking = Sim.ZoneRadius < Sim.zoneMax - 0.01f;
                 string zone = shrinking ? $"<color={Bad}>安全區縮小中</color>" : $"<color={Muted}>安全區 {Clock(gm.cfg.zoneStart * gm.cfg.matchDuration / 600f - Sim.time)} 後縮小</color>";
@@ -1157,7 +1157,7 @@ namespace Apocalypse
             if (gm.cfg.escape)
             {
                 string heliText = Sim.departAt >= 0 ? $"<color=#a5d6a7>直升機 {Clock(Mathf.Max(0f, Sim.departAt - Sim.time))} 後起飛！</color>"
-                                : Sim.readyAt < 0 && Sim.parts >= Sim.partsRequired && Sim.partsRequired > 0 ? $"<color=#ffd54f>技師組裝中 {Clock(Mathf.Max(0f, Sim.RepairGate - Sim.time))}</color>"
+                                : Sim.readyAt < 0 && Sim.parts >= Sim.partsRequired && Sim.partsRequired > 0 ? $"<color=#ffd54f>直升機組裝中 {Clock(Mathf.Max(0f, Sim.RepairGate - Sim.time))}</color>"
                                 : "<color=#aaa>修好直升機才能逃</color>";
                 GUI.Label(new Rect(r.x + 330, r.y + 6, 400, 24), $"零件  <b>{Mathf.Min(Sim.parts, Sim.partsRequired)} / {Sim.partsRequired}</b>   {heliText}", label);
                 Bar(new Rect(r.x + 330, r.y + 38, 380, 14), Sim.partsRequired > 0 ? (float)Sim.parts / Sim.partsRequired : 0f,
@@ -1474,7 +1474,7 @@ namespace Apocalypse
                               : Sim.classWon ? "<color=#a5d6a7>全班撐過了！城市守住了</color>" : "城市淪陷";
             GUI.Label(new Rect(r.x, r.y + 16, r.width, 50), head, title);
             string sub = esc
-                ? (Sim.classWon ? $"比賽還剩 {Clock(gm.cfg.matchDuration - Sim.time)} 時起飛，搭上直升機的人 +{gm.cfg.escapeBonus} 分" : $"零件 {Sim.parts}/{Sim.partsRequired}，還差 {Sim.partsRequired - Sim.parts} 個，全班被困在城市裡")
+                ? (Sim.classWon ? $"直升機在比賽還剩 {Clock(gm.cfg.matchDuration - Sim.time)} 時起飛，搭上直升機的人 +{gm.cfg.escapeBonus} 分" : $"零件 {Sim.parts}/{Sim.partsRequired}，還差 {Sim.partsRequired - Sim.parts} 個修好直升機，全班被困在城市裡")
                 : Sim.classWon ? $"最後城市感染 {Sim.cityInfection:0}%，每人 +{gm.cfg.classBonus} 分"
                 : $"在 {Clock(Sim.time)} 淪陷（再撐 {Clock(gm.cfg.matchDuration - Sim.time)} 就成功了）";
             GUI.Label(new Rect(r.x, r.y + 68, r.width, 26), $"<color=#aaa>{sub}</color>", center);

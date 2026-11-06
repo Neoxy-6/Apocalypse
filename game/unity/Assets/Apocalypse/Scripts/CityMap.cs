@@ -159,11 +159,11 @@ namespace Apocalypse
 
         public static string Validate(MapData data)
         {
-            if (data?.nodes == null || data.nodes.Length < 4) return "路口太少";
-            if (data.nodes.Count(n => n.type == "extraction") != 1) return "撤離點要剛好一個";
+            if (data?.nodes == null || data.nodes.Length < 4) return "路口數量不足（至少需要 4 個）";
+            if (data.nodes.Count(n => n.type == "extraction") != 1) return "撤離點必須剛好 1 個";
             var m = new CityMap();
             m.LoadCustom(data);
-            if (!m.Connected()) return "有路口走不到";
+            if (!m.Connected()) return "部分路口無法抵達";
             return null;
         }
 

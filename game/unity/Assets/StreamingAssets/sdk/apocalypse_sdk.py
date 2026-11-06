@@ -299,7 +299,7 @@ def load_map(src):
     if src.startswith("http"):
         data = requests.get(src.rstrip("/") + "/map", timeout=10).json()
         if data.get("ok") is False:
-            raise ApiError(data.get("error", "伺服器沒有自訂地圖"))
+            raise ApiError(data.get("error", "伺服器沒有提供自訂地圖"))
         return data
     import json
     return json.load(open(src, encoding="utf-8"))
@@ -438,7 +438,7 @@ def draw(st: State, ax=None, title: str | None = None):
         if e["depart_at"] > 0:
             goal = f"直升機 {max(0, int(e['depart_at'] - st.time))} 秒後起飛"
         elif e.get("ready_at", -1) >= 0:
-            goal = f"油桶 {e['fuel']}/{e['fuel_required']}（倒地就無法復活）"
+            goal = f"油桶 {e['fuel']}/{e['fuel_required']}（安全區外倒地無人救援將無法復活）"
         else:
             goal = f"零件 {e['parts']}/{e['parts_required']}"
     else:

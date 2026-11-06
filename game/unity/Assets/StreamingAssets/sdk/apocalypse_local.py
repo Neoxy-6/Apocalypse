@@ -603,18 +603,18 @@ INCIDENTS = {
     "outbreak": ("感染爆發", 8.0, 1, 60.0, 60),
     "bridge": ("橋樑損毀", 10.0, 1, 9999.0, 50),
     "airdrop": ("物資空投", 4.0, 1, 45.0, 40),
-    "trapped": ("受困人群", 20.0, 2, 75.0, 120),
+    "trapped": ("人群受困", 20.0, 2, 75.0, 120),
     "guard": ("撤離點告急", 8.0, 1, 50.0, 60),
     "heli": ("直升機故障", 24.0, 2, 60.0, 80),
     "medevac": ("醫療隊抵達", 6.0, 1, 50.0, 80),
     "napalm": ("呼叫空襲", 8.0, 1, 50.0, 60),
-    "decoy": ("聲波誘餌", 20.0, 2, 60.0, 90),
+    "decoy": ("部署聲波誘餌", 20.0, 2, 60.0, 90),
     "chest": ("神秘寶箱", 3.0, 1, 40.0, 150),
     "boss": ("殭屍王", 30.0, 3, 75.0, 200),
 
     "herbs": ("草藥採集", 6.0, 1, 50.0, 70),
-    "gas": ("加油站", 5.0, 1, 60.0, 80),
-    "rubble": ("瓦礫堆", 20.0, 2, 70.0, 100),
+    "gas": ("加油站補給", 5.0, 1, 60.0, 80),
+    "rubble": ("瓦礫堆採集", 20.0, 2, 70.0, 100),
     "bell": ("教堂鐘聲", 8.0, 1, 50.0, 70),
 
     "generator": ("發電機故障", 15.0, 1, 9999.0, 60),
@@ -630,17 +630,17 @@ INCIDENT_TEXT = {
     "airdrop": ("搶到了空投物資!", "空投物資被搶走了..."),
     "trapped": ("救出了受困的民眾!", "沒能救出受困的民眾..."),
     "guard": ("守住了撤離點!", "撤離點失守了!"),
-    "heli": ("排除了直升機故障!", "直升機故障沒排除!"),
+    "heli": ("成功修復直升機故障!", "直升機故障修復失敗!"),
     "medevac": ("接應到醫療隊!", "沒接應到醫療隊..."),
     "napalm": ("呼叫的空襲命中了!", "空襲沒呼叫成功..."),
     "decoy": ("啟動了聲波誘餌!", "聲波誘餌沒啟動..."),
     "chest": ("打開了神秘寶箱!", "沒搶到神秘寶箱..."),
     "boss": ("打倒了殭屍王!", "殭屍王沒被打倒..."),
     "herbs": ("採到了草藥!", "草藥沒採集到..."),
-    "gas": ("裝滿了油桶!", "加油站的油被搶光了..."),
-    "rubble": ("挖開了瓦礫堆!", "瓦礫堆沒挖開!"),
-    "bell": ("敲響了教堂的鐘!", "教堂的鐘沒敲響!"),
-    "generator": ("修好了發電機!", "發電機沒修好"),
+    "gas": ("成功取得加油站的備用燃油!", "加油站的油被搶光了..."),
+    "rubble": ("挖開了瓦礫堆!", "瓦礫堆沒挖開..."),
+    "bell": ("敲響了教堂的鐘!", "教堂的鐘沒敲響..."),
+    "generator": ("修好了發電機!", "發電機沒修好..."),
 }
 
 class Incident:
@@ -855,7 +855,7 @@ class Sim:
                     p.infection = min(p.infection, 30.0)
             before = len(self.zombies)
             self.zombies = [z for z in self.zombies if not self.in_zone(z.pos)]
-            self.log("heli", f"零件湊齊了！守軍清掉圈內 {before - len(self.zombies)} 隻殭屍，技師組裝中，再 {math.ceil(gate - self.time)} 秒修好", self.extraction)
+            self.log("heli", f"零件已收集完成！守軍已清除圈內 {before - len(self.zombies)} 隻殭屍，技師正在組裝直升機，將於 {math.ceil(gate - self.time)} 秒後修好", self.extraction)
         if self.ready_at < 0 and self.parts >= self.parts_required and self.time >= gate:
             self.ready_at = self.time
             for p in self.players:
@@ -865,16 +865,16 @@ class Sim:
             before = len(self.zombies)
             self.zombies = [z for z in self.zombies if not self.in_zone(z.pos)]
             self._spawn_fuel()
-            self.log("heli", f"直升機修好了！守軍清掉圈內 {before - len(self.zombies)} 隻殭屍，去撿回 {self.fuel_required} 桶油！", self.extraction)
+            self.log("heli", f"直升機修好了！守軍已清除圈內 {before - len(self.zombies)} 隻殭屍，還需撿回 {self.fuel_required} 桶油才能撤離。安全區外倒地無人救援將無法復活！", self.extraction)
         if self.ready_at >= 0 and self.depart_at < 0 and self.fuel >= self.fuel_required:
             self.depart_at = self.time + c["boardTime"]
-            self.log("heli", f"油加滿了！倒數暫停，{c['boardTime']:.0f} 秒後起飛，快回撤離點！", self.extraction)
+            self.log("heli", f"油加滿了！比賽計時已暫停，直升機將在 {c['boardTime']:.0f} 秒後起飛，快回撤離點！", self.extraction)
         if self.depart_at >= 0 and self.time >= self.depart_at:
             self.end("直升機起飛")
         elif self.depart_at < 0 and self.time >= c["matchDuration"]:
-            self.end("時間到，直升機沒修好" if self.ready_at < 0 else "時間到，油不夠，直升機飛不起來")
+            self.end("時間到！直升機沒修好" if self.ready_at < 0 else "時間到！燃油不足，直升機無法起飛")
         elif self.players and all(p.state == "eliminated" for p in self.players):
-            self.end("所有人都倒下了")
+            self.end("團滅！所有人都倒下了")
 
     @property
     def no_respawn(self):
@@ -1150,7 +1150,7 @@ class Sim:
             m.recompute()
             return
         e.blocked_until = self.time + 45 + self.rng.next_double() * 45
-        self.log("failure", f"有一段{'橋' if e.bridge else '道路'}壞了，{e.blocked_until - self.time:.0f} 秒後修好")
+        self.log("failure", f"{'橋樑' if e.bridge else '道路'}受損，將於 {e.blocked_until - self.time:.0f} 秒後恢復")
 
     def _roadblocks(self, dt):
         self.roadblock_timer -= dt
@@ -1172,7 +1172,7 @@ class Sim:
                 m.recompute()
                 continue
             e.blocked_until = self.time + c["roadblockTime"] * (0.75 + 0.5 * self.rng.next_double())
-            self.log("roadblock", f"屍潮堵住了路口 {e.a} 和 {e.b} 之間的路，{e.blocked_until - self.time:.0f} 秒後才散開", e.a)
+            self.log("roadblock", f"屍潮封鎖了路口 {e.a} 和 {e.b} 之間的道路，將於 {e.blocked_until - self.time:.0f} 秒後散開", e.a)
             return
 
     def incident_by_id(self, i):
@@ -1405,7 +1405,7 @@ class Sim:
         if inc.kind == "outbreak":
             self.zombies = [z for z in self.zombies if _vd(z.pos, pos) > 4.0]
             m.nodes[inc.node].infection = 0.0
-            effect = "當地殭屍清除、感染歸零!"
+            effect = "當地殭屍已清除，感染值歸零！"
         elif inc.kind == "bridge":
             e = m.edges[inc.edge] if 0 <= inc.edge < len(m.edges) else None
             if e is not None:
@@ -1454,7 +1454,7 @@ class Sim:
                 self.fuel_required = max(1, self.fuel_required - 1)
             else:
                 self.fuel_discount += 1
-            effect = "之後少要 1 桶油!"
+            effect = "直升機起飛所需油桶數 -1 !"
         elif inc.kind == "rubble":
             extra = max(1, _round(self.parts_required * 0.05))
             self.parts += extra
@@ -1478,7 +1478,7 @@ class Sim:
             self.heli_boost = True
             if self.ready_at >= 0:
                 self.fuel_required = max(1, self.fuel_required - 1)
-                effect = "直升機少需要 1 桶油!"
+                effect = "直升機起飛所需油桶數 -1 !"
             else:
                 less = max(1, _round(self.parts_required * 0.05))
                 self.parts_required = max(self.parts + 1, self.parts_required - less)
@@ -1494,7 +1494,7 @@ class Sim:
                 self.spawn_zombie(inc.node, -1)
             effect = "殭屍又多了 3 隻!"
         elif inc.kind == "bridge":
-            effect = "橋要再斷 2 分鐘!"
+            effect = "橋樑修復失敗，封鎖再延長 2 分鐘！"
         elif inc.kind == "airdrop":
             for _ in range(2):
                 self.spawn_zombie(inc.node, -1)
@@ -1535,7 +1535,7 @@ class Sim:
         else:
             if self.ready_at >= 0:
                 self.fuel_required += 1
-                effect = "油料外洩，要多撿 1 桶油!"
+                effect = "油料外洩，直升機起飛所需油桶數 +1！"
             else:
                 extra = max(1, _round(self.parts_required * 0.1))
                 self.parts_required += extra
@@ -1651,7 +1651,7 @@ class Sim:
             p.downed_timer -= dt
             if p.downed_timer <= 0:
                 if self.doomed(p):
-                    self._eliminate(p, p.eliminated_reason or "沒人來救")
+                    self._eliminate(p, p.eliminated_reason or "無人救援")
                 else:
                     self._respawn(p)
             return
@@ -1728,17 +1728,17 @@ class Sim:
             if p.medkits > 0:
                 p.medkits -= 1
             else:
-                p.last_error = f"[{self.time:.0f}s] drop_medkit：沒有醫療包（已略過此步）"
+                p.last_error = f"[{self.time:.0f}s] drop_medkit：你沒有攜帶醫療包（已略過此步）"
             return
         if a == "drop_weapon":
             if p.ammo > 0:
                 p.ammo = 0
             else:
-                p.last_error = f"[{self.time:.0f}s] drop_weapon：沒有武器（已略過此步）"
+                p.last_error = f"[{self.time:.0f}s] drop_weapon：你沒有攜帶武器（已略過此步）"
             return
         t = self.task_by_id(s["task"])
         if t is None or s["task"] not in p.cargo:
-            p.last_error = f"[{self.time:.0f}s] drop：你沒有攜帶委託 #{s['task']}（已略過此步）"
+            p.last_error = f"[{self.time:.0f}s] drop：你沒有攜帶委託 #{s['task']} 所需物品（已略過此步）"
             return
         p.cargo.remove(t.id)
         t.status, t.carrier, t.origin = "open", -1, at
@@ -1784,7 +1784,7 @@ class Sim:
         elif a == "dropoff":
             t = self.task_by_id(s["task"])
             if t is None or s["task"] not in p.cargo:
-                return f"dropoff：你沒有攜帶委託 #{s['task']}"
+                return f"dropoff：你沒有攜帶委託 #{s['task']} 所需物品"
             if t.dest != p.node:
                 return f"dropoff：委託 #{s['task']} 目的地是 {t.dest}，你在 {p.node}"
         elif a == "take_medkit":
@@ -1798,9 +1798,9 @@ class Sim:
             if node.type != "armory":
                 return "take_weapon：這裡不是軍火庫"
             if node.weapons <= 0:
-                return "take_weapon：軍火庫沒有武器了"
+                return "take_weapon：軍火庫已無武器"
             if p.ammo > 0:
-                return "take_weapon：你已經有武器了"
+                return "take_weapon：你已持有武器"
             if self.load(p) + self.cfg["weaponWeight"] > cap:
                 return "take_weapon：背包容量不足"
         elif a == "use_medkit":
@@ -1952,9 +1952,9 @@ class Sim:
         self.city_infection += 1
         p.eliminated_reason = reason
         if self.doomed(p):
-            self.log("down", f"{p.name} 在安全區外倒地了！{c['downedTime']:.0f} 秒內沒人來救就逃不掉了", p.node)
+            self.log("down", f"{p.name} 在安全區外倒地！{c['downedTime']:.0f} 秒內無人救援將無法逃出", p.node)
         else:
-            self.log("down", f"{p.name} 倒地（{reason}），掉落貨物、扣 {penalty} 分，{c['downedTime']:.0f} 秒內有人來救 +{c['reviveBonus']}，不然回撤離點復活", p.node)
+            self.log("down", f"{p.name} 倒地（{reason}）！貨物掉落、扣 {penalty} 分。{c['downedTime']:.0f} 秒內可由隊友救起（救援者 +{c['reviveBonus']} 分），逾時將自動返回撤離點復活", p.node)
 
     def _respawn(self, p, quiet=False):
         c = self.cfg

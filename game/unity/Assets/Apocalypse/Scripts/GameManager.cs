@@ -283,7 +283,7 @@ namespace Apocalypse
                     return;
 
                 case "GET /map":
-                    req.response = string.IsNullOrEmpty(sim.mapJson) ? "{\"ok\":false,\"error\":\"這場用的是隨機地圖\"}" : sim.mapJson;
+                    req.response = string.IsNullOrEmpty(sim.mapJson) ? "{\"ok\":false,\"error\":\"本場使用隨機地圖，沒有自訂地圖可下載\"}" : sim.mapJson;
                     return;
 
                 case "GET /results":
@@ -302,7 +302,7 @@ namespace Apocalypse
                     return;
                 }
             }
-            Reply(req, 404, "找不到 " + req.method + " " + req.path);
+            Reply(req, 404, "找不到(網址錯誤) " + req.method + " " + req.path);
         }
 
         static T Parse<T>(string json) where T : class
