@@ -151,4 +151,4 @@
 
 ## 素材來源
 
-卡皮巴拉模型：[Capybara](https://sketchfab.com/3d-models/capybara-b48dfa5224824446843b5870ea0794c1) by [Gotche](https://sketchfab.com/Gotche)， [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) 授權。
+卡皮巴拉模型：[Capybara](https://sketchfab.com/3d-models/capybara-b48dfa5224824446843b5870ea0794c1) by [Gotche](https://sketchfab.com/Gotche)， [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) 授權，遊戲中有轉換格式、調整顏色並加上配件。
