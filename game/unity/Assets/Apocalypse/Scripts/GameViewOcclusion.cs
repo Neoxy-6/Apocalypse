@@ -7,7 +7,7 @@ namespace Apocalypse
 
     public partial class GameView
     {
-        class OccGroup { public Renderer[] rs; public Material[][] orig, ghost; public int[] order; public Bounds b; public Vector2 xz; public bool faded; public float until; }
+        class OccGroup { public Renderer[] rs; public Material[][] orig, ghost; public Color[] ghostColor; public int[] order; public Bounds b; public Vector2 xz; public bool faded, decor, hidden; public float until, alpha = 1f; }
         readonly List<OccGroup> occGroups = new List<OccGroup>();
         static readonly Dictionary<int, Material> ghostCache = new Dictionary<int, Material>();
         static Shader ghostShader;
@@ -56,12 +56,58 @@ namespace Apocalypse
                     rs = rs, orig = rs.Select(x => x.sharedMaterials).ToArray(), order = rs.Select(x => x.sortingOrder).ToArray(),
 
                     ghost = rs.Select(x => { var gm = GhostMat(x.sharedMaterial.color); return ghostDepth != null ? new[] { ghostDepth, gm } : new[] { gm }; }).ToArray(),
+                    ghostColor = rs.Select(x => GhostMat(x.sharedMaterial.color).color).ToArray(),
                     b = b, xz = new Vector2(b.center.x, b.center.z),
+                    decor = root.parent == decorStatic || root.parent == decorAnim,
                 });
             }
         }
 
+        // 鏡頭拉越近，一般建築越透明，近到一定程度就完全看不到。設施、橋、直升機坪不受影響。
+        const float FadeOpaqueSize = 15f, FadeGoneSize = 6f;
+
         void UpdateOcclusion()
+        {
+            if (galleryMode) { UpdateGalleryOcclusion(); return; }
+            float a = galleryNoFade ? 1f : Mathf.InverseLerp(FadeGoneSize, FadeOpaqueSize, cam.orthographicSize);
+            if (mpb == null) mpb = new MaterialPropertyBlock();
+            foreach (var g in occGroups)
+            {
+                float want = g.decor ? a : 1f;
+                bool ghost = want < 0.999f, hidden = want < 0.02f;
+                if (ghost != g.faded)
+                {
+                    for (int i = 0; i < g.rs.Length; i++)
+                        if (g.rs[i] != null)
+                        {
+                            g.rs[i].sharedMaterials = ghost ? g.ghost[i] : g.orig[i];
+                            g.rs[i].sortingOrder = ghost ? 100 : g.order[i];
+                            if (!ghost) g.rs[i].SetPropertyBlock(null);
+                        }
+                    g.faded = ghost;
+                    g.alpha = -1f;
+                }
+                if (hidden != g.hidden)
+                {
+                    foreach (var r in g.rs) if (r != null) r.forceRenderingOff = hidden;
+                    g.hidden = hidden;
+                }
+                if (ghost && !hidden && Mathf.Abs(want - g.alpha) > 0.01f)
+                {
+                    g.alpha = want;
+                    for (int i = 0; i < g.rs.Length; i++)
+                    {
+                        if (g.rs[i] == null) continue;
+                        var c = g.ghostColor[i];
+                        mpb.Clear();
+                        mpb.SetColor("_Color", new Color(c.r, c.g, c.b, Mathf.Lerp(0.05f, 0.85f, want)));
+                        g.rs[i].SetPropertyBlock(mpb);
+                    }
+                }
+            }
+        }
+
+        void UpdateGalleryOcclusion()
         {
             float now = Time.unscaledTime;
             bool close = !galleryNoFade && cam.orthographicSize < 8.5f;
@@ -141,4 +187,5 @@ namespace Apocalypse
             }
         }
     }
-}
+}
+

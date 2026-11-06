@@ -799,9 +799,9 @@ namespace Apocalypse
                 lastFocusId = focus; lastFocusPos = fp.pos;
                 lead = Vector2.Lerp(lead, Vector2.ClampMagnitude(vel * 0.5f, 1.4f), 1f - Mathf.Exp(-2f * Time.unscaledDeltaTime));
                 target = Shown(fp) + lead;
-                size = follow >= 0 ? 6f : Mathf.Lerp(6.5f, 4.6f, push);
+                size = follow >= 0 ? 6f : Mathf.Lerp(9f, 7.5f, push);
             }
-            else if (follow < 0 && directorSpot.HasValue) { target = directorSpot.Value; size = Mathf.Lerp(6f, 4.4f, push); }
+            else if (follow < 0 && directorSpot.HasValue) { target = directorSpot.Value; size = Mathf.Lerp(8.5f, 7f, push); }
             PanCamera();
             if (manualTarget.HasValue && follow < 0 && !director) { target = manualTarget.Value; size = manualSize; }
             if (focusIncident >= 0 && follow < 0 && !director)
