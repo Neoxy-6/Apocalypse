@@ -39,7 +39,7 @@ namespace Apocalypse
             server.Start(cfg.port);
 
             var argv = System.Environment.GetCommandLineArgs();
-            bool wantsShots = argv.Contains("-capture") || argv.Contains("-captureEvery") || argv.Contains("-gallery");
+            bool wantsShots = argv.Contains("-capture") || argv.Contains("-captureEvery") || argv.Contains("-gallery") || argv.Contains("-record");
             if (!Application.isBatchMode || (wantsShots && SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null))
                 gameObject.AddComponent<GameView>();
         }
@@ -67,6 +67,32 @@ namespace Apocalypse
                 captureDir = args[i + 1];
                 captureEvery = every;
                 Directory.CreateDirectory(captureDir);
+            }
+            i = System.Array.IndexOf(args, "-record");
+            if (i >= 0 && i + 1 < args.Length)
+            {
+                int fps = 30;
+                if (i + 2 < args.Length) int.TryParse(args[i + 2], out fps);
+                StartCoroutine(Record(args[i + 1], Mathf.Clamp(fps, 1, 60)));
+            }
+        }
+
+        // 錄影：鎖定每幀的時間步長，不管存檔多慢，畫面都照固定 fps 前進；每幀（含 UI）存成一張 JPG
+        System.Collections.IEnumerator Record(string dir, int fps)
+        {
+            Directory.CreateDirectory(dir);
+            Time.captureFramerate = fps;
+            var eof = new WaitForEndOfFrame();
+            int frame = 0, endFrame = -1;
+            while (true)
+            {
+                yield return eof;
+                var tex = ScreenCapture.CaptureScreenshotAsTexture();
+                File.WriteAllBytes(Path.Combine(dir, $"f{frame:00000}.jpg"), tex.EncodeToJPG(88));
+                Destroy(tex);
+                frame++;
+                if (sim.status == MatchStatus.Ended && endFrame < 0) endFrame = frame;
+                if (endFrame >= 0 && frame - endFrame > fps * 9) { Application.Quit(); yield break; }
             }
         }
 
