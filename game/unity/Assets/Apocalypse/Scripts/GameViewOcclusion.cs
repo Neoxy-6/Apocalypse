@@ -7,7 +7,7 @@ namespace Apocalypse
 
     public partial class GameView
     {
-        class OccGroup { public Renderer[] rs; public Material[][] orig, ghost; public Color[] ghostColor; public int[] order; public Bounds b; public Vector2 xz; public bool faded, decor, hidden; public float until, alpha = 1f; }
+        class OccGroup { public Renderer[] rs; public Material[][] orig, ghost; public Color[] ghostColor; public Transform root; public int[] order; public Bounds b; public Vector2 xz; public bool faded, decor, hidden; public float until, alpha = 1f; }
         readonly List<OccGroup> occGroups = new List<OccGroup>();
         static readonly Dictionary<int, Material> ghostCache = new Dictionary<int, Material>();
         static Shader ghostShader;
@@ -58,7 +58,7 @@ namespace Apocalypse
                     ghost = rs.Select(x => { var gm = GhostMat(x.sharedMaterial.color); return ghostDepth != null ? new[] { ghostDepth, gm } : new[] { gm }; }).ToArray(),
                     ghostColor = rs.Select(x => GhostMat(x.sharedMaterial.color).color).ToArray(),
                     b = b, xz = new Vector2(b.center.x, b.center.z),
-                    decor = root.parent == decorStatic || root.parent == decorAnim,
+                    decor = root.parent == decorStatic || root.parent == decorAnim, root = root,
                 });
             }
         }
@@ -148,15 +148,35 @@ namespace Apocalypse
                         if (g.b.IntersectRay(new Ray(tp, back))) { g.until = now + 0.35f; break; }
                     }
                 bool want = close && now < g.until;
-                if (want == g.faded) continue;
-                for (int i = 0; i < g.rs.Length; i++)
-                    if (g.rs[i] != null)
-                    {
-                        g.rs[i].sharedMaterials = want ? g.ghost[i] : g.orig[i];
-                        g.rs[i].sortingOrder = want ? 100 : g.order[i];
-                    }
-                g.faded = want;
+                // 拍撤離點時：擋住的樹、房子、別的設施直接藏起來，撤離點自己的東西不動
+                bool hide = want && galleryHide;
+                if (galleryHide && !GalleryHideable(g)) want = hide = false;
+                bool ghost = want && !hide;
+                if (ghost != g.faded)
+                {
+                    for (int i = 0; i < g.rs.Length; i++)
+                        if (g.rs[i] != null)
+                        {
+                            g.rs[i].sharedMaterials = ghost ? g.ghost[i] : g.orig[i];
+                            g.rs[i].sortingOrder = ghost ? 100 : g.order[i];
+                        }
+                    g.faded = ghost;
+                }
+                if (hide != g.hidden)
+                {
+                    foreach (var r in g.rs) if (r != null) r.forceRenderingOff = hide;
+                    g.hidden = hide;
+                }
             }
+        }
+
+        bool galleryHide;
+
+        bool GalleryHideable(OccGroup g)
+        {
+            if (g.decor || g.root == null) return true;
+            string n = g.root.name;
+            return n == "marker" || (n.StartsWith("node") && n != "node" + Sim.extraction);
         }
 
         void TintPlayer(PlayerView v, Player p, float t)

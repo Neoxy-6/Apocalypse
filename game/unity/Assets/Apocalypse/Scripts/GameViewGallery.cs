@@ -75,7 +75,9 @@ namespace Apocalypse
                 .FirstOrDefault();
 
             galleryNoFade = true;
-            yield return Shot("extraction", Lift(FacilityPos(Sim.extraction), 1f), 4.2f);
+            galleryHide = true;
+            yield return Shot("extraction", Lift(FacilityPos(Sim.extraction), 1f), 3.8f, 2.2f, FacilityPos(Sim.extraction));
+            galleryHide = false;
             yield return Shot("guard", Lift(guardTower, 1.4f), 2.4f, 2.2f, guardTower);
             foreach (var (name, type) in new[] { ("hospital", NodeType.Hospital), ("supply", NodeType.Supply), ("factory", NodeType.Factory), ("armory", NodeType.Armory) })
             {
