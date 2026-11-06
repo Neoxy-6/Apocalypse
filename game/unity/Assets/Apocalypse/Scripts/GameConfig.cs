@@ -39,6 +39,7 @@ namespace Apocalypse
         public float coopTaskPlayers = 3f;
 
         public bool escape = true;
+        public int pixelHeight = 216;
         public float partsBase = 0f;
         public float partsPerPlayer = 7f;
         public float partsCrowding = 0.15f;
@@ -132,6 +133,7 @@ namespace Apocalypse
                 {
                     case "-port": int.TryParse(v, out cfg.port); break;
                     case "-seed": int.TryParse(v, out cfg.seed); break;
+                    case "-pixel": int.TryParse(v, out cfg.pixelHeight); break;
                     case "-map": cfg.mapFile = v; break;
                     case "-duration": float.TryParse(v, out cfg.matchDuration); break;
                     case "-timescale": float.TryParse(v, out cfg.timeScale); break;

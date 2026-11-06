@@ -94,6 +94,7 @@ namespace Apocalypse
             cam.allowHDR = false;
             LoadSavedUrl();
             cam.gameObject.AddComponent<BloomFx>();
+            if (gm.cfg.pixelHeight > 0) cam.gameObject.AddComponent<PixelFx>().height = gm.cfg.pixelHeight;
 
             foreach (var l in FindObjectsByType<Light>()) l.enabled = false;
             var sun = new GameObject("Sun").AddComponent<Light>();

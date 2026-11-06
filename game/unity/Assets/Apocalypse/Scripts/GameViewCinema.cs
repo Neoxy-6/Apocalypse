@@ -116,7 +116,17 @@ namespace Apocalypse
             shakeAmp *= Mathf.Exp(-3.5f * dt);
             float t = Time.unscaledTime * 22f;
             var shake = (cam.transform.right * (Mathf.PerlinNoise(t, 0.3f) - 0.5f) + cam.transform.up * (Mathf.PerlinNoise(0.7f, t) - 0.5f)) * 2f * shakeAmp;
-            cam.transform.position = camBase.Value + shake;
+            var pos = camBase.Value + shake;
+            if (gm.cfg.pixelHeight > 0)
+            {
+                // 像素風：鏡頭只移動整數個「大像素」，靜止的東西才不會邊緣閃爍
+                float unit = cam.orthographicSize * 2f / gm.cfg.pixelHeight;
+                var right = cam.transform.right; var up = cam.transform.up; var fwd = cam.transform.forward;
+                pos = right * (Mathf.Round(Vector3.Dot(pos, right) / unit) * unit)
+                    + up * (Mathf.Round(Vector3.Dot(pos, up) / unit) * unit)
+                    + fwd * Vector3.Dot(pos, fwd);
+            }
+            cam.transform.position = pos;
         }
 
         MeshRenderer zoneWall;
