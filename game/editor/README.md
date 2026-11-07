@@ -50,9 +50,9 @@ Apocalypse.exe -map test.json
 
 `-seed` 還是有用，事件、零件、民眾出現的方式由它決定，地圖則照檔案。
 
-## 學生練習
+## 練習
 
-伺服器用自訂地圖時，學生在 Colab 加上 `map=SERVER_URL`，就會用同一張地圖練習：
+伺服器用自訂地圖時，在 Colab 加上 `map=SERVER_URL`，就會用同一張地圖練習：
 
 ```python
 games = test_local(my_make_policy, seeds=[1, 2, 3], name=MY_NAME, map=SERVER_URL)
