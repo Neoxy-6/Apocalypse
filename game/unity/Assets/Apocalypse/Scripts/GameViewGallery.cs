@@ -129,6 +129,16 @@ namespace Apocalypse
                     yield return new WaitForSecondsRealtime(2.5f);
                     Sim.incidents.Remove(inc);
                 }
+                // 守軍清圈的金光
+                galleryTarget = map.nodes[Sim.extraction].pos;
+                gallerySize = 12f;
+                yield return new WaitForSecondsRealtime(0.6f);
+                ZoneBlessing(Time.unscaledTime, 10f);   // 修好時安全區通常已縮到 10 左右
+                yield return new WaitForSecondsRealtime(0.7f);
+                GameManager.CaptureTo(Path.Combine(dir, "outcome_blessing_a.png"));
+                yield return new WaitForSecondsRealtime(0.8f);
+                GameManager.CaptureTo(Path.Combine(dir, "outcome_blessing_b.png"));
+                yield return new WaitForSecondsRealtime(2f);
             }
             yield return new WaitForSecondsRealtime(0.5f);
             Application.Quit();

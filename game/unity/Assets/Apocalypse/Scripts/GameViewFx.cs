@@ -442,6 +442,7 @@ namespace Apocalypse
                     Burst(W(p, 0.5f), new Color(0.12f, 0.12f, 0.12f, 0.8f), new Color(0.3f, 0.1f, 0.1f, 0.7f), 30, 1f, 1.1f, 2.5f, -0.1f, 0.3f);
                     break;
                 case "heli":
+                    if (e.text.Contains("守軍已清除")) { ZoneBlessing(Time.unscaledTime); break; }
                     Shake(0.3f);
                     var pad = gm.cfg.escape ? FacilityPos(Sim.extraction) : p;
                     Burst(W(pad, 0.5f), new Color(1f, 0.9f, 0.4f, 1f), new Color(1f, 1f, 1f, 1f), 70, 4f, 0.18f, 1.5f, 0.4f, 0.5f);

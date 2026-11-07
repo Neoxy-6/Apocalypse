@@ -118,6 +118,78 @@ namespace Apocalypse
             return h;
         }
 
+        // 守軍清圈、全員補滿血：從撤離點升起光柱，金光掃過整個安全區
+        void ZoneBlessing(float t, float radius = -1f)
+        {
+            var pad = FacilityPos(Sim.extraction);
+            var center = Sim.map.nodes[Sim.extraction].pos;
+            float R = radius > 0f ? radius : Sim.ZoneRadius, d = R * 2f;
+            var size = Sim.map.Size;
+            // 光線只畫到地圖邊緣，不要射出地圖外
+            float ToEdge(float deg)
+            {
+                var dir = new Vector2(Mathf.Sin(deg * Mathf.Deg2Rad), Mathf.Cos(deg * Mathf.Deg2Rad));
+                float m = 1.5f, best = R;
+                if (dir.x > 1e-4f) best = Mathf.Min(best, (size.x + m - pad.x) / dir.x);
+                if (dir.x < -1e-4f) best = Mathf.Min(best, (-m - pad.x) / dir.x);
+                if (dir.y > 1e-4f) best = Mathf.Min(best, (size.y + m - pad.y) / dir.y);
+                if (dir.y < -1e-4f) best = Mathf.Min(best, (-m - pad.y) / dir.y);
+                return Mathf.Max(0f, best);
+            }
+            Color gold = new Color(1f, 0.85f, 0.35f), pale = new Color(1f, 0.97f, 0.8f);
+            var o = NewOutcome("zone_blessing", 3.2f, t);
+            var root = o.root;
+            Shake(0.35f);
+
+            var pillar = Part(root, PrimitiveType.Cylinder, pale, Vector3.zero, Vector3.one, default, true).transform;
+            var halo = Part(root, PrimitiveType.Cylinder, gold, Vector3.zero, Vector3.one, default, true).transform;
+            pillar.position = W(pad, 6f); halo.position = W(pad, 6f);
+            var rays = Enumerable.Range(0, 16).Select(i =>
+            {
+                var g = new GameObject("ray").transform; g.SetParent(root, false);
+                g.position = W(pad, 0.15f); g.rotation = Quaternion.Euler(0, i * 22.5f, 0);
+                var bar = Part(g, PrimitiveType.Cube, i % 2 == 0 ? pale : gold, Vector3.zero, Vector3.one, default, true).transform;
+                return (g, bar);
+            }).ToArray();
+            var glow = FxGlow(root, center, new Color(1f, 0.85f, 0.4f, 0f), d * 1.15f);
+            var core = FxGlow(root, pad, new Color(1f, 0.95f, 0.7f, 0f), 7f);
+            var waves = Enumerable.Range(0, 3).Select(_ => FxRing(root, pad, gold, 1f, 0.1f)).ToArray();
+            var edge = FxRing(root, center, pale, d, 0.08f);
+            var motes = Particles(root, W(center, 0.2f), new Color(1f, 0.95f, 0.6f, 1f), new Color(1f, 0.8f, 0.3f, 1f), 60f, 2.2f, 0.6f, 0.14f, -0.15f, new Vector3(d * 0.45f, 0.1f, d * 0.45f), 0.3f);
+
+            Burst(W(pad, 0.3f), pale, gold, 90, 5f, 0.2f, 1.6f, -0.3f, 0.6f);
+            Burst(W(pad, 0.1f), gold, new Color(1f, 0.85f, 0.35f, 0.6f), 80, 7f, 0.16f, 1f, 0f, 0.8f, true);
+            foreach (var q in Sim.players.Where(q => q.state == PlayerState.Active))
+            {
+                var at = W(Shown(q), 0.2f);
+                Burst(at, new Color(0.6f, 1f, 0.65f, 1f), pale, 30, 1.2f, 0.14f, 1.6f, -1f, 0.35f);
+                Burst(at, gold, new Color(1f, 0.85f, 0.35f, 0.5f), 24, 1.6f, 0.1f, 0.7f, 0f, 0.3f, true);
+            }
+
+            o.tick = (k, now) =>
+            {
+                float rise = Mathf.Clamp01(k * 5f), fade = 1f - Mathf.Clamp01((k - 0.55f) / 0.45f);
+                float w = (0.9f + 0.15f * Mathf.Sin(now * 18f)) * rise * fade;
+                pillar.localScale = new Vector3(w, 6f, w);
+                halo.localScale = new Vector3(w * 2.1f, 6f * rise, w * 2.1f) * (0.7f + 0.3f * fade);
+                halo.gameObject.SetActive(fade > 0.05f && Mathf.Repeat(now * 10f, 1f) < 0.6f);
+                foreach (var (g, bar) in rays)
+                {
+                    g.rotation = Quaternion.Euler(0, g.eulerAngles.y + Time.unscaledDeltaTime * 25f, 0);
+                    float len = ToEdge(g.eulerAngles.y) * Mathf.Clamp01(k * 2.2f);
+                    bar.localPosition = new Vector3(0, 0, len * 0.5f);
+                    bar.localScale = new Vector3(0.22f * fade, 0.03f, len);
+                }
+                for (int i = 0; i < waves.Length; i++) Wave(waves[i], new Color(1f, 0.85f, 0.35f, 0.95f), Mathf.Clamp01(k * 1.8f - i * 0.18f), 1f, d);
+                glow.color = new Color(1f, 0.85f, 0.4f, 0.45f * Mathf.Clamp01(k * 4f) * fade);
+                core.color = new Color(1f, 0.95f, 0.7f, 0.8f * fade);
+                float hit = Mathf.Clamp01((k - 0.45f) * 6f);
+                edge.color = new Color(1f, 0.97f, 0.8f, hit * fade * (0.6f + 0.4f * Mathf.Sin(now * 14f)));
+                edge.transform.localScale = Vector3.one * d * (1f + 0.04f * Mathf.Sin(now * 6f));
+                if (k > 0.85f) { var em = motes.emission; em.enabled = false; }
+            };
+        }
+
         void PlayOutcome(Incident inc, Vector2 spot, bool solved, float t)
         {
             var map = Sim.map;
