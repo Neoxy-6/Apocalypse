@@ -34,6 +34,7 @@ namespace Apocalypse
         public int extraction;
         public int parts, partsRequired;
         public float readyAt = -1f, departAt = -1f;
+        public float zoneClearedAt = -1f;   // 守軍清圈（全員補血）的時間，畫面用來放特效
         public float zoneMax;
         public int guardKills;
         float guardCooldown;
@@ -207,7 +208,7 @@ namespace Apocalypse
             foreach (var n in map.nodes) if (n.type == NodeType.Armory) n.weapons = cfg.weaponStock;
             var ex = map.nodes[extraction].pos;
             zoneMax = map.nodes.Max(n => Vector2.Distance(n.pos, ex)) + 1f;
-            parts = partsRequired = 0; readyAt = departAt = -1f; assembling = false; assembleAt = -1f; guardKills = 0; guardCooldown = 0f; guardShots.Clear(); playerShots.Clear();
+            parts = partsRequired = 0; readyAt = departAt = -1f; zoneClearedAt = -1f; assembling = false; assembleAt = -1f; guardKills = 0; guardCooldown = 0f; guardShots.Clear(); playerShots.Clear();
             incidents.Clear(); evacuated = 0; speedBoostUntil = guardDownUntil = -1f; heliBoost = false;
             nextIncidentId = 0; incidentTimer = 25f; roadblockTimer = 40f; roadblockIndex = 0; lastPhase = 0; lastGeneratorBreak = -999f;
             zombieStunUntil = -1f; infectionGuardUntil = -1f; medevacTimer = 5f; medevacNext = 0f; medevacRolls = 0;
@@ -381,6 +382,7 @@ namespace Apocalypse
                     if (p.state == PlayerState.Active) { p.hp = 100f; p.infection = Mathf.Min(p.infection, 30f); }
                 int before = zombies.Count;
                 zombies.RemoveAll(z => InZone(z.pos));
+                zoneClearedAt = time;
                 Log("heli", $"零件已收集完成！守軍已清除圈內 {before - zombies.Count} 隻殭屍，技師正在組裝直升機，將於 {Mathf.CeilToInt(RepairGate - time)} 秒後修好", extraction);
             }
             if (readyAt < 0 && parts >= partsRequired && time >= RepairGate)
@@ -390,6 +392,7 @@ namespace Apocalypse
                     if (p.state == PlayerState.Active) { p.hp = 100f; p.infection = Mathf.Min(p.infection, 30f); }
                 int before = zombies.Count;
                 zombies.RemoveAll(z => InZone(z.pos));
+                zoneClearedAt = time;
                 SpawnFuel();
                 Log("heli", $"直升機修好了！守軍已清除圈內 {before - zombies.Count} 隻殭屍，還需撿回 {fuelRequired} 桶油才能撤離。安全區外倒地無人救援將無法復活！", extraction);
             }
