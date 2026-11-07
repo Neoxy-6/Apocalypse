@@ -58,6 +58,11 @@
   "partDecay": 0,
   "earlyBonusPerSec": 0.5,
   "escapeBonus": 100,
+  "herbGuardTime": 30,
+  "herbCityDrop": 20,
+  "gasFuelBonus": 3,
+  "gasBlastRadius": 5,
+  "gasBlastDamage": 60,
   "guardRange": 5.0,
   "guardFireInterval": 1.0
 }

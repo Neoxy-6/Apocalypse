@@ -59,6 +59,9 @@ namespace Apocalypse
         public float repairEarliest = 0.62f;
 
         public float stunTime = 40f;
+        public float herbGuardTime = 30f, herbCityDrop = 20f;
+        public int gasFuelBonus = 3;
+        public float gasBlastRadius = 5f, gasBlastDamage = 60f;
 
         public float partWeightReward = 12f, rescueRewardMul = 2f, incidentRewardMul = 1f;
         public float partDecay = 0f;

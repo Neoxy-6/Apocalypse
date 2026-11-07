@@ -42,6 +42,7 @@ namespace Apocalypse
         public int evacuated;
         public float speedBoostUntil = -1f, guardDownUntil = -1f;
         public float zombieStunUntil = -1f;
+        public float infectionGuardUntil = -1f;   // 草藥：這之前全員感染值不會上升
         float medevacTimer, medevacNext;
         int medevacRolls;
         public bool heliBoost;
@@ -94,7 +95,7 @@ namespace Apocalypse
             ["chest"] = ("打開了神秘寶箱!", "沒搶到神秘寶箱..."),
             ["boss"] = ("打倒了殭屍王!", "殭屍王沒被打倒..."),
             ["herbs"] = ("採到了草藥!", "草藥沒採集到..."),
-            ["gas"] = ("成功取得加油站的備用燃油!", "加油站的油被搶光了..."),
+            ["gas"] = ("成功取得加油站的備用燃油!", "加油站爆炸了..."),
             ["rubble"] = ("挖開了瓦礫堆!", "瓦礫堆沒挖開..."),
             ["bell"] = ("敲響了教堂的鐘!", "教堂的鐘沒敲響..."),
             ["generator"] = ("修好了發電機!", "發電機沒修好..."),
@@ -209,7 +210,7 @@ namespace Apocalypse
             parts = partsRequired = 0; readyAt = departAt = -1f; assembling = false; assembleAt = -1f; guardKills = 0; guardCooldown = 0f; guardShots.Clear(); playerShots.Clear();
             incidents.Clear(); evacuated = 0; speedBoostUntil = guardDownUntil = -1f; heliBoost = false;
             nextIncidentId = 0; incidentTimer = 25f; roadblockTimer = 40f; roadblockIndex = 0; lastPhase = 0; lastGeneratorBreak = -999f;
-            zombieStunUntil = -1f; medevacTimer = 5f; medevacNext = 0f; medevacRolls = 0;
+            zombieStunUntil = -1f; infectionGuardUntil = -1f; medevacTimer = 5f; medevacNext = 0f; medevacRolls = 0;
             fuel = fuelRequired = fuelDiscount = 0;
             tasks.Clear(); zombies.Clear(); events.Clear(); batches.Clear(); noises.Clear();
             players.RemoveAll(p => p.team.IsBot);
@@ -370,10 +371,12 @@ namespace Apocalypse
 
         void UpdateHelicopter()
         {
+            // 組裝中遇到「直升機故障」零件需求變高：回到收集零件，再湊齊時重新觸發（安全區維持第一次湊齊時停住的大小）
+            if (assembling && readyAt < 0 && parts < partsRequired) assembling = false;
             if (readyAt < 0 && parts >= partsRequired && time < RepairGate && !assembling)
             {
                 assembling = true;
-                assembleAt = time;
+                if (assembleAt < 0) assembleAt = time;
                 foreach (var p in players)
                     if (p.state == PlayerState.Active) { p.hp = 100f; p.infection = Mathf.Min(p.infection, 30f); }
                 int before = zombies.Count;
@@ -708,6 +711,9 @@ namespace Apocalypse
 
         public int ComboOf(Player p) => time - p.lastScoreAt <= cfg.comboWindow ? p.combo : 0;
 
+        // 截圖用：直接讓事件成功或失敗
+        public void DebugResolve(Incident inc, bool solved) { if (solved) SolveIncident(inc, new List<Player>()); else FailIncident(inc); }
+
         void SolveIncident(Incident inc, List<Player> workers)
         {
             inc.status = "solved";
@@ -756,21 +762,24 @@ namespace Apocalypse
                     break;
                 }
                 case "napalm":
-                    effect = $"炸掉了附近 {zombies.RemoveAll(z => Vector2.Distance(z.pos, pos) <= 8f)} 隻殭屍!";
+                {
+                    bool side = map.West(inc.node);
+                    effect = $"整個區域被炸平，{zombies.RemoveAll(z => map.West(z.node) == side)} 隻殭屍被清除！";
                     break;
+                }
                 case "decoy":
                     zombieStunUntil = time + cfg.stunTime;
                     effect = $"全城殭屍暫停 {cfg.stunTime:0} 秒!";
                     break;
                 case "herbs":
-                    foreach (var q in players)
-                        if (q.state == PlayerState.Active) { q.medkits++; q.hp = Mathf.Min(100f, q.hp + 30f); }
-                    effect = "全員多一個醫療包、生命 +30!";
+                    infectionGuardUntil = time + cfg.herbGuardTime;
+                    cityInfection = Mathf.Max(0f, cityInfection - cfg.herbCityDrop);
+                    effect = $"全員感染值 {cfg.herbGuardTime:0} 秒內不會上升，城市感染 -{cfg.herbCityDrop:0}%！";
                     break;
                 case "gas":
-                    if (readyAt >= 0) fuelRequired = Mathf.Max(1, fuelRequired - 1);
-                    else fuelDiscount++;
-                    effect = "直升機起飛所需油桶數 -1 !";
+                    if (readyAt >= 0) fuelRequired = Mathf.Max(1, fuelRequired - cfg.gasFuelBonus);
+                    else fuelDiscount += cfg.gasFuelBonus;
+                    effect = $"直升機起飛所需油桶數 -{cfg.gasFuelBonus} !";
                     break;
                 case "rubble":
                 {
@@ -789,11 +798,10 @@ namespace Apocalypse
                 }
                 case "bell":
                 {
-                    var town = tasks.Where(t => t.type == TaskType.Rescue && (t.status == TaskStatus.Open || t.status == TaskStatus.Announced)
-                                                && map.nodes[t.origin].district == 3).ToList();
-                    foreach (var t in town) { t.status = TaskStatus.Done; t.expiresAt = time; }
-                    evacuated += town.Count;
-                    effect = $"鎮民聽到鐘聲! {town.Count} 名平民逃到避難所";
+                    var all = tasks.Where(t => t.type == TaskType.Rescue && (t.status == TaskStatus.Open || t.status == TaskStatus.Announced)).ToList();
+                    foreach (var t in all) { t.status = TaskStatus.Done; t.expiresAt = time; }
+                    evacuated += all.Count;
+                    effect = $"鐘聲響遍全城！{all.Count} 名平民逃到避難所";
                     break;
                 }
                 case "chest":
@@ -835,8 +843,7 @@ namespace Apocalypse
                     effect = "橋樑修復失敗，封鎖再延長 2 分鐘！";
                     break;
                 case "airdrop":
-                    for (int i = 0; i < 2; i++) SpawnZombie(inc.node, -1);
-                    effect = "物資被殭屍佔領!";
+                    effect = "這次什麼也沒拿到。";
                     break;
                 case "trapped":
                     for (int i = 0; i < 4; i++) SpawnZombie(inc.node, -1);
@@ -850,9 +857,10 @@ namespace Apocalypse
                     effect = "醫療隊撤走了!";
                     break;
                 case "napalm":
+                    effect = "轟炸機沒有出現。";
+                    break;
                 case "decoy":
-                    for (int i = 0; i < 2; i++) SpawnZombie(inc.node, -1);
-                    effect = "訊號引來 2 隻殭屍!";
+                    effect = "誘餌沒有發出聲音。";
                     break;
                 case "chest":
                     effect = "寶箱被殭屍叼走了!";
@@ -862,8 +870,20 @@ namespace Apocalypse
                     effect = "草叢裡竄出 2 隻殭屍!";
                     break;
                 case "gas":
-                    effect = "這次沒裝到油!";
+                {
+                    var at = map.nodes[inc.node].pos;
+                    int hurt = 0;
+                    foreach (var q in players)
+                    {
+                        if (q.state != PlayerState.Active || Vector2.Distance(q.pos, at) > cfg.gasBlastRadius) continue;
+                        q.hp -= cfg.gasBlastDamage;
+                        hurt++;
+                        if (q.hp <= 0f) Down(q, "被加油站爆炸波及");
+                    }
+                    int blown = zombies.RemoveAll(z => Vector2.Distance(z.pos, at) <= cfg.gasBlastRadius);
+                    effect = $"{hurt} 名玩家受傷，{blown} 隻殭屍被炸飛！";
                     break;
+                }
                 case "rubble":
                     for (int i = 0; i < 2; i++) SpawnZombie(inc.node, -1);
                     effect = "瓦礫裡爬出 2 隻殭屍!";
@@ -1644,9 +1664,19 @@ namespace Apocalypse
             Log("eliminated", $"{p.name} 倒下了（{reason}），沒能逃出", p.node);
         }
 
+        int RespawnNode()
+        {
+            if (!cfg.escape) return map.startNode;
+            if (time >= guardDownUntil) return extraction;
+            int best = -1;
+            foreach (var n in map.nodes)
+                if (n.type == NodeType.Hospital && (best < 0 || map.dist[extraction, n.id] < map.dist[extraction, best])) best = n.id;
+            return best >= 0 ? best : extraction;
+        }
+
         void Respawn(Player p, bool quiet = false)
         {
-            p.node = cfg.escape ? extraction : map.startNode; p.nextNode = -1; p.progress = 0;
+            p.node = RespawnNode(); p.nextNode = -1; p.progress = 0;
             p.pos = map.nodes[p.node].pos;
             p.state = PlayerState.Active;
             p.hp = cfg.respawnHp;
@@ -1656,7 +1686,7 @@ namespace Apocalypse
             p.eliminatedAt = -1f; p.eliminatedReason = "";
             p.plan.Clear(); p.planIndex = 0; p.pending = null;
             if (quiet) return;
-            Log("respawn", $"{p.name} 在{(cfg.escape ? "撤離點" : "避難所")}復活", p.node);
+            Log("respawn", $"{p.name} 在{(!cfg.escape ? "避難所" : p.node == extraction ? "撤離點" : "醫院")}復活", p.node);
         }
 
         public float ZombieSpeed => cfg.zombieSpeed + cfg.zombieSpeedPerPhase * Phase;
@@ -1768,10 +1798,11 @@ namespace Apocalypse
             {
                 if (p.state != PlayerState.Active || time < p.protectUntil) continue;
                 var here = map.nodes[p.node];
+                float infK = time < infectionGuardUntil ? 0f : 1f;
                 if (cfg.escape && !InZone(p.pos))
                 {
                     p.hp -= cfg.zoneDamage * dt;
-                    p.infection += cfg.zoneInfection * dt;
+                    p.infection += cfg.zoneInfection * dt * infK;
                 }
                 bool inSafeZone = p.nextNode < 0 && IsSafe(p.node);
                 if (!inSafeZone && time >= zombieStunUntil)
@@ -1781,7 +1812,7 @@ namespace Apocalypse
                     {
                         if (Vector2.Distance(z.pos, p.pos) > cfg.zombieAttackRange) continue;
                         p.hp -= cfg.zombieDamage * scale * dt;
-                        p.infection += cfg.zombieInfection * scale * dt;
+                        p.infection += cfg.zombieInfection * scale * dt * infK;
                         hit = true;
                     }
 
@@ -1790,7 +1821,7 @@ namespace Apocalypse
                         p.lastScream = time;
                         MakeNoise(p.nextNode >= 0 && p.progress > 0.5f ? p.nextNode : p.node, cfg.screamRadius, 6f, "scream");
                     }
-                    if (p.nextNode < 0 && here.infection > 0.7f) p.infection += 0.5f * dt;
+                    if (p.nextNode < 0 && here.infection > 0.7f) p.infection += 0.5f * dt * infK;
                 }
                 if (p.infection >= 100f) { p.infection = 100f; Down(p, "感染值達到上限"); }
                 else if (p.hp <= 0f) Down(p, "被殭屍咬倒");
@@ -1839,8 +1870,8 @@ namespace Apocalypse
                         }
                     endReason = $"直升機起飛！{players.Count(p => p.escaped)}/{players.Count} 人逃出城市";
                 }
-                else if (readyAt < 0) endReason = $"直升機沒修好（零件 {parts}/{partsRequired}），全班被困在城市裡";
                 else if (players.Count > 0 && players.All(p => p.state == PlayerState.Eliminated)) endReason = "所有人都倒下了，直升機沒能起飛";
+                else if (readyAt < 0) endReason = $"直升機沒修好（零件 {parts}/{partsRequired}），全班被困在城市裡";
                 else endReason = $"油不夠（{fuel}/{fuelRequired} 桶），直升機飛不起來";
             }
             else

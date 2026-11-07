@@ -31,6 +31,7 @@ DEFAULTS = dict(
     fuelPerPlayer=0.6, fuelSpare=4, fuelSparePerPlayer=0.3, fuelReward=80, boardTime=45.0, repairEarliest=0.62,
 
     stunTime=40.0,
+    herbGuardTime=30.0, herbCityDrop=20.0, gasFuelBonus=3, gasBlastRadius=5.0, gasBlastDamage=60.0,
 
     partWeightReward=12.0, rescueRewardMul=2.0, incidentRewardMul=1.0,
 
@@ -638,7 +639,7 @@ INCIDENT_TEXT = {
     "chest": ("打開了神秘寶箱!", "沒搶到神秘寶箱..."),
     "boss": ("打倒了殭屍王!", "殭屍王沒被打倒..."),
     "herbs": ("採到了草藥!", "草藥沒採集到..."),
-    "gas": ("成功取得加油站的備用燃油!", "加油站的油被搶光了..."),
+    "gas": ("成功取得加油站的備用燃油!", "加油站爆炸了..."),
     "rubble": ("挖開了瓦礫堆!", "瓦礫堆沒挖開..."),
     "bell": ("敲響了教堂的鐘!", "教堂的鐘沒敲響..."),
     "generator": ("修好了發電機!", "發電機沒修好..."),
@@ -692,6 +693,7 @@ class Sim:
         self.evacuated = 0
         self.speed_boost_until = self.guard_down_until = -1.0
         self.zombie_stun_until = -1.0
+        self.infection_guard_until = -1.0
         self.medevac_timer, self.medevac_next, self.medevac_rolls = 5.0, 0.0, 0
         self.heli_boost = False
         self.fuel, self.fuel_required, self.fuel_discount = 0, 0, 0
@@ -847,9 +849,12 @@ class Sim:
     def _helicopter(self):
         c = self.cfg
         gate = self.repair_gate
+        if self.assembling and self.ready_at < 0 and self.parts < self.parts_required:
+            self.assembling = False
         if self.ready_at < 0 and self.parts >= self.parts_required and self.time < gate and not self.assembling:
             self.assembling = True
-            self.assemble_at = self.time
+            if self.assemble_at < 0:
+                self.assemble_at = self.time
             for p in self.players:
                 if p.state == "active":
                     p.hp = 100.0
@@ -1434,9 +1439,10 @@ class Sim:
                 self._respawn(q, quiet=True)
             effect = f"{len(back)} 位倒下的同學全部復活!"
         elif inc.kind == "napalm":
+            side = m.side_a[inc.node]
             n0 = len(self.zombies)
-            self.zombies = [z for z in self.zombies if _vd(z.pos, pos) > 8.0]
-            effect = f"炸掉了附近 {n0 - len(self.zombies)} 隻殭屍!"
+            self.zombies = [z for z in self.zombies if m.side_a[z.node] != side]
+            effect = f"整個區域被炸平，{n0 - len(self.zombies)} 隻殭屍被清除！"
         elif inc.kind == "decoy":
             self.zombie_stun_until = self.time + c["stunTime"]
             effect = f"全城殭屍暫停 {c['stunTime']:.0f} 秒!"
@@ -1445,28 +1451,25 @@ class Sim:
             self.parts += extra
             effect = f"寶箱裡有 {extra} 個零件和 {reward} 分!"
         elif inc.kind == "herbs":
-            for q in self.players:
-                if q.state == "active":
-                    q.medkits += 1
-                    q.hp = min(100.0, q.hp + 30)
-            effect = "全員多一個醫療包、生命 +30!"
+            self.infection_guard_until = self.time + c["herbGuardTime"]
+            self.city_infection = max(0.0, self.city_infection - c["herbCityDrop"])
+            effect = f"全員感染值 {c['herbGuardTime']:.0f} 秒內不會上升，城市感染 -{c['herbCityDrop']:.0f}%！"
         elif inc.kind == "gas":
             if self.ready_at >= 0:
-                self.fuel_required = max(1, self.fuel_required - 1)
+                self.fuel_required = max(1, self.fuel_required - int(c["gasFuelBonus"]))
             else:
-                self.fuel_discount += 1
-            effect = "直升機起飛所需油桶數 -1 !"
+                self.fuel_discount += int(c["gasFuelBonus"])
+            effect = f"直升機起飛所需油桶數 -{int(c['gasFuelBonus'])} !"
         elif inc.kind == "rubble":
             extra = max(1, _round(self.parts_required * 0.05))
             self.parts += extra
             effect = f"挖出 {extra} 個零件!"
         elif inc.kind == "bell":
-            town = [t for t in self.tasks if t.type == "rescue" and t.status in ("open", "announced")
-                    and m.nodes[t.origin].district == "town"]
-            for t in town:
+            everyone = [t for t in self.tasks if t.type == "rescue" and t.status in ("open", "announced")]
+            for t in everyone:
                 t.status, t.expires_at = "done", self.time
-            self.evacuated += len(town)
-            effect = f"鎮民聽到鐘聲! {len(town)} 名平民逃到避難所"
+            self.evacuated += len(everyone)
+            effect = f"鐘聲響遍全城！{len(everyone)} 名平民逃到避難所"
         elif inc.kind == "boss":
             n0 = len(self.zombies)
             self.zombies = [z for z in self.zombies if _vd(z.pos, pos) > 6.0]
@@ -1497,9 +1500,7 @@ class Sim:
         elif inc.kind == "bridge":
             effect = "橋樑修復失敗，封鎖再延長 2 分鐘！"
         elif inc.kind == "airdrop":
-            for _ in range(2):
-                self.spawn_zombie(inc.node, -1)
-            effect = "物資被殭屍佔領!"
+            effect = "這次什麼也沒拿到。"
         elif inc.kind == "trapped":
             for _ in range(4):
                 self.spawn_zombie(inc.node, -1)
@@ -1509,10 +1510,10 @@ class Sim:
             effect = f"撤離點守衛倒下! {c['guardDownTime']:.0f} 秒內無法攻擊殭屍!"
         elif inc.kind == "medevac":
             effect = "醫療隊撤走了!"
-        elif inc.kind in ("napalm", "decoy"):
-            for _ in range(2):
-                self.spawn_zombie(inc.node, -1)
-            effect = "訊號引來 2 隻殭屍!"
+        elif inc.kind == "napalm":
+            effect = "轟炸機沒有出現。"
+        elif inc.kind == "decoy":
+            effect = "誘餌沒有發出聲音。"
         elif inc.kind == "chest":
             effect = "寶箱被殭屍叼走了!"
         elif inc.kind == "herbs":
@@ -1520,7 +1521,18 @@ class Sim:
                 self.spawn_zombie(inc.node, -1)
             effect = "草叢裡竄出 2 隻殭屍!"
         elif inc.kind == "gas":
-            effect = "這次沒裝到油!"
+            at = m.nodes[inc.node].pos
+            hurt = 0
+            for q in self.players:
+                if q.state != "active" or _vd(q.pos, at) > c["gasBlastRadius"]:
+                    continue
+                q.hp -= c["gasBlastDamage"]
+                hurt += 1
+                if q.hp <= 0:
+                    self._down(q, "被加油站爆炸波及")
+            n0 = len(self.zombies)
+            self.zombies = [z for z in self.zombies if _vd(z.pos, at) > c["gasBlastRadius"]]
+            effect = f"{hurt} 名玩家受傷，{n0 - len(self.zombies)} 隻殭屍被炸飛！"
         elif inc.kind == "rubble":
             for _ in range(2):
                 self.spawn_zombie(inc.node, -1)
@@ -1958,9 +1970,20 @@ class Sim:
         else:
             self.log("down", f"{p.name} 倒地（{reason}）！貨物掉落、扣 {penalty} 分。{c['downedTime']:.0f} 秒內可由隊友救起（救援者 +{c['reviveBonus']} 分），逾時將自動返回撤離點復活", p.node)
 
+    def _respawn_node(self):
+        if not self.cfg["escape"]:
+            return self.map.start_node
+        if self.time >= self.guard_down_until:
+            return self.extraction
+        best = -1
+        for n in self.map.nodes:
+            if n.type == "hospital" and (best < 0 or self.map.dist[self.extraction, n.id] < self.map.dist[self.extraction, best]):
+                best = n.id
+        return best if best >= 0 else self.extraction
+
     def _respawn(self, p, quiet=False):
         c = self.cfg
-        p.node, p.next_node, p.progress = (self.extraction if c["escape"] else self.map.start_node), -1, 0.0
+        p.node, p.next_node, p.progress = self._respawn_node(), -1, 0.0
         p.pos = self.map.nodes[p.node].pos
         p.state, p.hp, p.infection = "active", c["respawnHp"], min(p.infection, 30.0)
         p.protect_until = self.time + 5.0
@@ -1969,7 +1992,7 @@ class Sim:
         p.plan, p.plan_index, p.pending = [], 0, None
         if quiet:
             return
-        self.log("respawn", f"{p.name} 在{'撤離點' if c['escape'] else '避難所'}復活", p.node)
+        self.log("respawn", f"{p.name} 在{'避難所' if not c['escape'] else '撤離點' if p.node == self.extraction else '醫院'}復活", p.node)
 
     def _eliminate(self, p, reason):
         if p.next_node >= 0 and p.progress > 0.5:
@@ -2084,21 +2107,22 @@ class Sim:
             if p.state != "active" or self.time < p.protect_until:
                 continue
             here = self.map.nodes[p.node]
+            inf_k = 0.0 if self.time < self.infection_guard_until else 1.0
             if c["escape"] and not self.in_zone(p.pos):
                 p.hp -= c["zoneDamage"] * dt
-                p.infection += c["zoneInfection"] * dt
+                p.infection += c["zoneInfection"] * dt * inf_k
             if not (p.next_node < 0 and self.is_safe(p.node)) and self.time >= self.zombie_stun_until:
                 hit = False
                 for z in self.zombies:
                     if _vd(z.pos, p.pos) <= c["zombieAttackRange"]:
                         p.hp -= c["zombieDamage"] * scale * dt
-                        p.infection += c["zombieInfection"] * scale * dt
+                        p.infection += c["zombieInfection"] * scale * dt * inf_k
                         hit = True
                 if hit and self.time - p.last_scream > 3:
                     p.last_scream = self.time
                     self._noise(p.next_node if p.next_node >= 0 and p.progress > 0.5 else p.node, c["screamRadius"], 6.0, "scream")
                 if p.next_node < 0 and here.infection > F07:
-                    p.infection += 0.5 * dt
+                    p.infection += 0.5 * dt * inf_k
             if p.infection >= 100:
                 p.infection = 100.0
                 self._down(p, "感染值達到上限")
@@ -2121,10 +2145,10 @@ class Sim:
                         p.score += self.cfg["escapeBonus"] + _round(self.time_left() * self.cfg["earlyBonusPerSec"])
                 n = sum(p.escaped for p in self.players)
                 self.end_reason = f"直升機起飛！{n}/{len(self.players)} 人逃出城市"
-            elif self.ready_at < 0:
-                self.end_reason = f"直升機沒修好（零件 {self.parts}/{self.parts_required}），全班被困在城市裡"
             elif self.players and all(p.state == "eliminated" for p in self.players):
                 self.end_reason = "所有人都倒下了，直升機沒能起飛"
+            elif self.ready_at < 0:
+                self.end_reason = f"直升機沒修好（零件 {self.parts}/{self.parts_required}），全班被困在城市裡"
             else:
                 self.end_reason = f"油不夠（{self.fuel}/{self.fuel_required} 桶），直升機飛不起來"
             for i, p in enumerate(self.ranking()):
@@ -2188,7 +2212,7 @@ class Sim:
                         zone_y=m.nodes[self.extraction].pos[1], zone_radius=self.zone_radius,
                         zone_damage=c["zoneDamage"], escape_bonus=c["escapeBonus"], evacuated=self.evacuated,
                         speed_boost_until=self.speed_boost_until, guard_down_until=self.guard_down_until,
-                        zombie_stun_until=self.zombie_stun_until,
+                        zombie_stun_until=self.zombie_stun_until, infection_guard_until=self.infection_guard_until,
                         heli_boost=self.heli_boost, fuel=self.fuel, fuel_required=self.fuel_required),
             incidents=[dict(id=i.id, type=i.kind, name=i.name, node=i.node, deadline=i.deadline, progress=i.progress,
                             need=i.need, min_people=i.min_people, workers=i.workers, status=i.status,
