@@ -34,6 +34,15 @@ namespace Apocalypse.EditorTools
         }
 
         [MenuItem("Apocalypse/建置 Windows 版")]
+        // 預設輸出到 Build/；加 -buildOut <資料夾> 可以輸出到別處（遊戲開著時也能測試建置）
+        static string OutPath()
+        {
+            var args = System.Environment.GetCommandLineArgs();
+            int i = System.Array.IndexOf(args, "-buildOut");
+            string dir = i >= 0 && i + 1 < args.Length ? args[i + 1] : Path.Combine(Application.dataPath, "..", "Build");
+            return Path.GetFullPath(Path.Combine(dir, "Apocalypse.exe"));
+        }
+
         public static void BuildWindows()
         {
             EnsureScene();
@@ -46,7 +55,7 @@ namespace Apocalypse.EditorTools
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = new[] { ScenePath },
-                locationPathName = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Build", "Apocalypse.exe")),
+                locationPathName = OutPath(),
                 target = BuildTarget.StandaloneWindows64,
                 options = BuildOptions.None,
             });
