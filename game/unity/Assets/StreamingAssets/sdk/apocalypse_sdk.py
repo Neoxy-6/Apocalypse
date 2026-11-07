@@ -264,6 +264,7 @@ class Game:
         self.wait_until_running()
         last_print = 0.0
         while True:
+            t0 = time.time()
             try:
                 st = self.state()
             except (requests.RequestException, ApiError) as e:
@@ -289,7 +290,8 @@ class Game:
             if verbose and time.time() - last_print > 10:
                 print(st)
                 last_print = time.time()
-            time.sleep(interval)
+            # 抓狀態、算策略、送計畫已經花掉的時間要扣掉，不然連線慢的時候每輪會多等
+            time.sleep(max(0.0, interval - (time.time() - t0)))
 
 
 def load_map(src):
