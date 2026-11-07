@@ -132,6 +132,7 @@ namespace Apocalypse
             string buffs = "";
             if (Sim.time < Sim.speedBoostUntil) buffs += $"<color=#9be7b0>全員加速 {Clock(Sim.speedBoostUntil - Sim.time)}</color>   ";
             if (Sim.time < Sim.zombieStunUntil) buffs += $"<color=#c7b3ff>殭屍僵直 {Clock(Sim.zombieStunUntil - Sim.time)}</color>   ";
+            if (Sim.time < Sim.infectionGuardUntil) buffs += $"<color=#9be7b0>感染抑制 {Clock(Sim.infectionGuardUntil - Sim.time)}</color>   ";
             if (Sim.time < Sim.guardDownUntil) buffs += $"<color=#ff8a75>守衛倒下 {Clock(Sim.guardDownUntil - Sim.time)}</color>   ";
             if (buffs != "") GUI.Label(new Rect(W - 600, 128, 582, 28), buffs, new GUIStyle(wcSmall) { alignment = TextAnchor.MiddleRight, fontSize = 16 });
 

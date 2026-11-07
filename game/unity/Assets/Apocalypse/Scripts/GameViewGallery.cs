@@ -110,6 +110,26 @@ namespace Apocalypse
                 Sim.incidents.Remove(inc);
                 yield return null;
             }
+            if (System.Environment.GetCommandLineArgs().Contains("-galleryOutcomes"))
+            {
+                // 事件結果的特效（只有加 -galleryOutcomes 才拍，README 的圖不受影響）
+                float whole = Mathf.Max(map.Size.x, map.Size.y) * 0.62f;
+                foreach (var (kind, solved, size, wait) in new[] { ("napalm", true, whole, 1.4f), ("herbs", true, whole, 0.9f), ("bell", true, whole, 1.0f),
+                                                                  ("gas", true, 6f, 0.9f), ("gas", false, 6f, 0.45f) })
+                {
+                    var inc = Sim.DebugIncident(kind, spot.id);
+                    if (inc == null) continue;
+                    yield return new WaitForSecondsRealtime(0.4f);
+                    galleryTarget = kind == "napalm" || kind == "herbs" || kind == "bell" ? map.Size * 0.5f : map.nodes[inc.node].pos;
+                    gallerySize = size;
+                    yield return new WaitForSecondsRealtime(0.4f);
+                    Sim.DebugResolve(inc, solved);
+                    yield return new WaitForSecondsRealtime(wait);
+                    GameManager.CaptureTo(Path.Combine(dir, $"outcome_{kind}_{(solved ? "ok" : "fail")}.png"));
+                    yield return new WaitForSecondsRealtime(2.5f);
+                    Sim.incidents.Remove(inc);
+                }
+            }
             yield return new WaitForSecondsRealtime(0.5f);
             Application.Quit();
         }

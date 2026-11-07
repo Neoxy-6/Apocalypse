@@ -764,7 +764,10 @@ namespace Apocalypse
             if (Sim.departAt >= 0)
                 foreach (int s in new[] { 30, 15, 10 })
                     if (Sim.departAt - Sim.time <= s && departMark > s) { departMark = s; Add($"{s} 秒後起飛！還在外面的快回撤離點", s <= 10 ? Bad : Warn); }
-            if (!lastMinuteAnnounced && !Sim.ClockStopped && Sim.TimeLeft <= 60f) { lastMinuteAnnounced = true; Add(Sim.departAt >= 0 ? "最後 1 分鐘，快回撤離點！" : "最後 1 分鐘！零件還差 " + (Sim.partsRequired - Sim.parts), Warn); }
+            if (!lastMinuteAnnounced && !Sim.ClockStopped && Sim.TimeLeft <= 60f) { lastMinuteAnnounced = true; Add(Sim.departAt >= 0 ? "最後 1 分鐘，快回撤離點！"
+                    : Sim.readyAt >= 0 ? $"最後 1 分鐘！油桶還差 {Mathf.Max(0, Sim.fuelRequired - Sim.fuel)} 桶"
+                    : Sim.parts >= Sim.partsRequired ? "最後 1 分鐘！直升機組裝中"
+                    : "最後 1 分鐘！零件還差 " + (Sim.partsRequired - Sim.parts), Warn); }
         }
 
         void UpdateCamera()
@@ -1476,13 +1479,37 @@ namespace Apocalypse
             var r = new Rect(W / 2f - 460, H / 2f - 110 - rowH / 2f * ranking.Count, 920, 220 + rowH * ranking.Count);
             Box(r, new Color(0.02f, 0.03f, 0.06f, 0.9f));
             bool esc = gm.cfg.escape;
-            string head = esc ? (Sim.classWon ? $"<color=#a5d6a7>直升機起飛！{Sim.players.Count(p => p.escaped)}/{Sim.players.Count} 人逃出</color>" : "<color=#ff5252>直升機沒修好</color>")
-                              : Sim.classWon ? "<color=#a5d6a7>全班撐過了！城市守住了</color>" : "城市淪陷";
+            string head, sub;
+            if (!esc)
+            {
+                head = Sim.classWon ? "<color=#a5d6a7>全班撐過了！城市守住了</color>" : "城市淪陷";
+                sub = Sim.classWon ? $"最後城市感染 {Sim.cityInfection:0}%，每人 +{gm.cfg.classBonus} 分"
+                                   : $"在 {Clock(Sim.time)} 淪陷（再撐 {Clock(gm.cfg.matchDuration - Sim.time)} 就成功了）";
+            }
+            else if (Sim.classWon)
+            {
+                // 加分照 EndMatch 實際算的：基本分 + 計時停住時剩下秒數的加成
+                float left = Sim.TimeLeft;
+                int bonus = gm.cfg.escapeBonus + Mathf.RoundToInt(left * gm.cfg.earlyBonusPerSec);
+                head = $"<color=#a5d6a7>直升機起飛！{Sim.players.Count(p => p.escaped)}/{Sim.players.Count} 人逃出</color>";
+                sub = $"直升機在比賽還剩 {Clock(left)} 時起飛，搭上直升機的人 +{bonus} 分";
+            }
+            else if (Sim.players.Count > 0 && Sim.players.All(p => p.state == PlayerState.Eliminated))
+            {
+                head = "<color=#ff5252>團滅！所有人都倒下了</color>";
+                sub = "所有人都倒下了，直升機沒能起飛";
+            }
+            else if (Sim.readyAt < 0)
+            {
+                head = "<color=#ff5252>直升機沒修好</color>";
+                sub = $"零件 {Sim.parts}/{Sim.partsRequired}，還差 {Mathf.Max(0, Sim.partsRequired - Sim.parts)} 個修好直升機，全班被困在城市裡";
+            }
+            else
+            {
+                head = "<color=#ff5252>燃油不足，直升機無法起飛</color>";
+                sub = $"油桶 {Sim.fuel}/{Sim.fuelRequired}，還差 {Mathf.Max(0, Sim.fuelRequired - Sim.fuel)} 桶燃油，全班被困在城市裡";
+            }
             GUI.Label(new Rect(r.x, r.y + 16, r.width, 50), head, title);
-            string sub = esc
-                ? (Sim.classWon ? $"直升機在比賽還剩 {Clock(gm.cfg.matchDuration - Sim.time)} 時起飛，搭上直升機的人 +{gm.cfg.escapeBonus} 分" : $"零件 {Sim.parts}/{Sim.partsRequired}，還差 {Sim.partsRequired - Sim.parts} 個修好直升機，全班被困在城市裡")
-                : Sim.classWon ? $"最後城市感染 {Sim.cityInfection:0}%，每人 +{gm.cfg.classBonus} 分"
-                : $"在 {Clock(Sim.time)} 淪陷（再撐 {Clock(gm.cfg.matchDuration - Sim.time)} 就成功了）";
             GUI.Label(new Rect(r.x, r.y + 68, r.width, 26), $"<color=#aaa>{sub}</color>", center);
             string[] cols = esc ? new[] { "名次", "玩家", "分數", "零件", "救援", "事件", "油桶", "救人", "倒地", "逃出" }
                                 : new[] { "名次", "玩家", "分工", "分數", "壓低感染", "配送", "救援", "倒地", "撤離" };

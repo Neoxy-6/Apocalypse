@@ -268,18 +268,33 @@ namespace Apocalypse
                     }
                     case "napalm":
                     {
+                        bool side = map.West(inc.node);
+                        var area = map.nodes.Where(n => map.West(n.id) == side).Select(n => n.pos).ToList();
+                        var center = area.Aggregate(Vector2.zero, (a, b) => a + b) / Mathf.Max(1, area.Count);
+                        float reach = area.Max(p => Vector2.Distance(p, center)) + 4f;
                         var dir = new Vector2(1f, -0.4f).normalized;
-                        var jet = new GameObject("jet").transform; jet.SetParent(root, false);
-                        Part(jet, PrimitiveType.Cube, new Color(0.45f, 0.5f, 0.5f), Vector3.zero, new Vector3(0.3f, 0.2f, 1.4f));
-                        Part(jet, PrimitiveType.Cube, new Color(0.4f, 0.45f, 0.45f), new Vector3(0, 0, -0.1f), new Vector3(1.6f, 0.05f, 0.5f));
-                        Part(jet, PrimitiveType.Cube, new Color(0.4f, 0.45f, 0.45f), new Vector3(0, 0.25f, -0.6f), new Vector3(0.05f, 0.4f, 0.3f));
-                        jet.rotation = Quaternion.LookRotation(new Vector3(dir.x, 0, dir.y));
-                        bool[] boomed = new bool[3];
+                        var perp = new Vector2(-dir.y, dir.x);
+                        var jets = Enumerable.Range(0, 3).Select(i =>
+                        {
+                            var jet = new GameObject("jet").transform; jet.SetParent(root, false);
+                            Part(jet, PrimitiveType.Cube, new Color(0.45f, 0.5f, 0.5f), Vector3.zero, new Vector3(0.45f, 0.3f, 2.1f));
+                            Part(jet, PrimitiveType.Cube, new Color(0.4f, 0.45f, 0.45f), new Vector3(0, 0, -0.15f), new Vector3(2.4f, 0.08f, 0.75f));
+                            Part(jet, PrimitiveType.Cube, new Color(0.4f, 0.45f, 0.45f), new Vector3(0, 0.38f, -0.9f), new Vector3(0.08f, 0.6f, 0.45f));
+                            jet.rotation = Quaternion.LookRotation(new Vector3(dir.x, 0, dir.y));
+                            return (jet, (i - 1) * reach * 0.45f, i * 0.06f);
+                        }).ToArray();
+                        var hits = area.OrderBy(_ => rnd.Next()).Take(30).OrderBy(p => Vector2.Dot(p - center, dir)).ToList();
+                        bool[] boomed = new bool[hits.Count];
+                        var glow = FxGlow(root, center, new Color(1f, 0.45f, 0.1f, 0f), reach * 2f);
+                        Shake(0.6f);
+                        o.dur = 3.6f;
                         o.tick = (k, now) =>
                         {
-                            jet.position = At(node + dir * Mathf.Lerp(-14f, 14f, k), 5f);
-                            for (int i = 0; i < 3; i++)
-                                if (!boomed[i] && k > 0.42f + i * 0.08f) { boomed[i] = true; Explosion(node + dir * ((i - 1) * 2.2f), 1.3f); }
+                            foreach (var (jet, off, d) in jets)
+                                jet.position = At(center + perp * off + dir * Mathf.Lerp(-reach - 8f, reach + 8f, Mathf.Clamp01((k - d) / 0.7f)), 6f);
+                            for (int i = 0; i < hits.Count; i++)
+                                if (!boomed[i] && k > 0.15f + 0.6f * i / hits.Count) { boomed[i] = true; Explosion(hits[i], 1.6f); }
+                            glow.color = new Color(1f, 0.45f, 0.1f, 0.45f * Mathf.Sin(Mathf.Clamp01(k * 1.2f) * Mathf.PI));
                         };
                         break;
                     }
@@ -343,8 +358,15 @@ namespace Apocalypse
                     case "herbs":
                     {
                         var leaves = Enumerable.Range(0, 16).Select(_ => Part(root, PrimitiveType.Sphere, new Color(0.4f, 0.85f, 0.35f), Vector3.zero, new Vector3(0.22f, 0.04f, 0.12f), default, true).transform).ToArray();
+                        float mapR = map.Size.magnitude;
+                        var waves = Enumerable.Range(0, 3).Select(_ => FxRing(root, spot, new Color(0.45f, 1f, 0.55f), 1f, 0.12f)).ToArray();
+                        foreach (var q in Sim.players.Where(q => q.state == PlayerState.Active))
+                            Burst(At(Shown(q), 1.2f), new Color(0.5f, 1f, 0.55f, 1f), new Color(0.9f, 1f, 0.9f, 1f), 25, 1.6f, 0.12f, 1.4f, -0.6f, 0.3f);
+                        banners.Add(new Banner { text = $"全員感染值 {gm.cfg.herbGuardTime:0} 秒內不會上升！城市感染 -{gm.cfg.herbCityDrop:0}%", color = "#9be7b0", until = Time.unscaledTime + 3.5f });
+                        o.dur = 3f;
                         o.tick = (k, now) =>
                         {
+                            for (int i = 0; i < waves.Length; i++) Wave(waves[i], new Color(0.45f, 1f, 0.55f, 0.8f), Mathf.Clamp01(k * 1.4f - i * 0.15f), 1f, mapR * 2.2f);
                             for (int i = 0; i < leaves.Length; i++)
                             {
                                 float a = i * 0.39f + k * 9f, r = 0.4f + k * 1.6f;
@@ -357,13 +379,27 @@ namespace Apocalypse
                     }
                     case "gas":
                     {
-                        var barrel = Part(root, PrimitiveType.Cylinder, new Color(0.85f, 0.2f, 0.15f), Vector3.zero, new Vector3(0.35f, 0.25f, 0.35f)).transform;
-                        var trail = Particles(barrel, barrel.position, new Color(1f, 0.85f, 0.4f, 1f), new Color(1f, 0.6f, 0.2f, 0.8f), 40f, 0.6f, 0.2f, 0.15f, 0f, new Vector3(0.1f, 0.1f, 0.1f), 0f, 0f, 9);
+                        int n = Mathf.Max(1, gm.cfg.gasFuelBonus);
+                        var barrels = Enumerable.Range(0, n).Select(i =>
+                        {
+                            var b = Part(root, PrimitiveType.Cylinder, new Color(0.85f, 0.2f, 0.15f), Vector3.zero, new Vector3(0.45f, 0.32f, 0.45f)).transform;
+                            var tr = Particles(b, b.position, new Color(1f, 0.85f, 0.4f, 1f), new Color(1f, 0.6f, 0.2f, 0.8f), 40f, 0.6f, 0.25f, 0.18f, 0f, new Vector3(0.1f, 0.1f, 0.1f), 0f, 0f, 9);
+                            return (b, tr, i * 0.12f);
+                        }).ToArray();
+                        var pad = FxGlow(root, ex, new Color(1f, 0.7f, 0.25f, 0f), 6f);
+                        banners.Add(new Banner { text = $"加油站補給成功！直升機少要 {n} 桶油", color = Gold, until = Time.unscaledTime + 3.5f });
+                        o.dur = 2.4f;
                         o.tick = (k, now) =>
                         {
-                            barrel.position = Arc(At(spot, 0.3f), At(ex, 0.4f), 5f, k);
-                            barrel.rotation = Quaternion.Euler(now * 300f, 0, now * 150f);
-                            trail.transform.position = barrel.position;
+                            foreach (var (b, tr, d) in barrels)
+                            {
+                                float q = Mathf.Clamp01((k - d) / 0.7f);
+                                b.position = Arc(At(spot, 0.3f), At(ex, 0.4f), 6f, q);
+                                b.rotation = Quaternion.Euler(now * 300f, 0, now * 150f);
+                                b.localScale = new Vector3(0.45f, 0.32f, 0.45f) * (q >= 1f ? 0f : 1f);
+                                tr.transform.position = b.position;
+                            }
+                            pad.color = new Color(1f, 0.7f, 0.25f, 0.6f * Mathf.Clamp01((k - 0.5f) * 3f) * (1f - k));
                         };
                         break;
                     }
@@ -393,7 +429,9 @@ namespace Apocalypse
                     }
                     case "bell":
                     {
-                        var rings = Enumerable.Range(0, 4).Select(_ => FxRing(root, spot, new Color(1f, 0.9f, 0.5f), 1f, 1.5f)).ToArray();
+                        var rings = Enumerable.Range(0, 6).Select(_ => FxRing(root, spot, new Color(1f, 0.9f, 0.5f), 1f, 1.5f)).ToArray();
+                        float bellR = map.Size.magnitude * 2.2f;
+                        banners.Add(new Banner { text = "鐘聲響遍全城！所有平民都去避難了", color = Gold, until = Time.unscaledTime + 3.5f });
                         var people = Enumerable.Range(0, 4).Select(i =>
                         {
                             var dir = new Vector2(Mathf.Cos(i * 1.57f + 0.4f), Mathf.Sin(i * 1.57f + 0.4f));
@@ -402,7 +440,7 @@ namespace Apocalypse
                         o.dur = 3f;
                         o.tick = (k, now) =>
                         {
-                            for (int i = 0; i < rings.Length; i++) Wave(rings[i], new Color(1f, 0.9f, 0.5f, 0.9f), Mathf.Repeat(k * 2f - i * 0.25f, 1f), 1f, 12f);
+                            for (int i = 0; i < rings.Length; i++) Wave(rings[i], new Color(1f, 0.9f, 0.5f, 0.9f), Mathf.Clamp01(k * 1.3f - i * 0.12f), 1f, bellR);
                             for (int i = 0; i < people.Length; i++) RunCivilian(people[i].Item1, people[i].Item2, people[i].Item3, k, i);
                         };
                         break;
@@ -599,14 +637,30 @@ namespace Apocalypse
                     }
                     case "gas":
                     {
-                        var drum = Part(root, PrimitiveType.Cylinder, new Color(0.45f, 0.42f, 0.4f), Vector3.zero, new Vector3(0.3f, 0.22f, 0.3f)).transform;
-                        Burst(At(spot, 0.3f), new Color(0.5f, 0.5f, 0.5f, 0.7f), new Color(0.3f, 0.3f, 0.3f, 0.5f), 20, 1f, 0.4f, 1.2f, -0.1f, 0.3f);
-                        o.dur = 1.8f;
+                        var blast = map.nodes[inc.node].pos;
+                        float r = gm.cfg.gasBlastRadius;
+                        var ball = Part(root, PrimitiveType.Sphere, new Color(1f, 0.55f, 0.15f), Vector3.zero, Vector3.one, default, true).transform;
+                        var shock = FxRing(root, blast, new Color(1f, 0.5f, 0.2f), 1f, 0.1f);
+                        var scorch = FxGlow(root, blast, new Color(0.08f, 0.05f, 0.04f, 0.85f), r * 2f);
+                        var drums = Enumerable.Range(0, 6).Select(i =>
+                        {
+                            var dr = Part(root, PrimitiveType.Cylinder, new Color(0.7f, 0.2f, 0.15f), Vector3.zero, new Vector3(0.35f, 0.25f, 0.35f)).transform;
+                            float ang = i * 1.05f;
+                            return (dr, At(blast + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * r * F(rnd, 0.7f, 1.3f), 0.1f));
+                        }).ToArray();
+                        Explosion(blast, 3.5f);
+                        Shake(0.9f);
+                        bool second = false;
+                        o.dur = 2.6f;
                         o.tick = (k, now) =>
                         {
-                            drum.position = At(spot + new Vector2(k * 1.2f, 0), 0.15f);
-                            drum.rotation = Quaternion.Euler(0, 0, 90f) * Quaternion.Euler(0, -k * 600f, 0);
-                            drum.localScale = new Vector3(0.3f, 0.22f, 0.3f) * (k > 0.8f ? (1f - k) * 5f : 1f);
+                            float g = Mathf.Clamp01(k * 3f);
+                            ball.position = At(blast, 0.5f + g * 1.5f);
+                            ball.localScale = Vector3.one * r * 1.4f * Mathf.Sin(g * Mathf.PI * 0.5f) * (1f - Mathf.Clamp01((k - 0.3f) * 2f));
+                            Wave(shock, new Color(1f, 0.5f, 0.2f, 1f), Mathf.Clamp01(k * 2f), 1f, r * 2.4f);
+                            scorch.color = new Color(0.08f, 0.05f, 0.04f, 0.85f * (k > 0.7f ? (1f - k) / 0.3f : 1f));
+                            foreach (var (dr, to) in drums) { dr.position = Arc(At(blast, 0.3f), to, 4f, Mathf.Clamp01(k * 1.6f)); dr.rotation = Quaternion.Euler(now * 500f, 0, now * 300f); }
+                            if (!second && k > 0.25f) { second = true; Explosion(blast + new Vector2(0.8f, 0.4f), 2.2f); }
                         };
                         break;
                     }

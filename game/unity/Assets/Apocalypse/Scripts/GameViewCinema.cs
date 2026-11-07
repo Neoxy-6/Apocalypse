@@ -366,8 +366,11 @@ namespace Apocalypse
             em.rateOverTime = moving ? 9f : 0f;
             v.glow.transform.position = W(Shown(p), 0.03f + GroundH(Shown(p)));
             bool hurt = p.state == PlayerState.Active && (p.hp < 35f || p.infection > 70f);
-            v.glow.color = hurt ? new Color(1f, 0.15f, 0.1f, 0.35f + 0.25f * Mathf.Sin(t * 8f))
-                         : downed ? new Color(1f, 0.3f, 0.2f, 0.25f) : new Color(p.color.r, p.color.g, p.color.b, 0.3f);
+            bool herbal = Sim.time < Sim.infectionGuardUntil && p.state == PlayerState.Active;
+            v.glow.color = hurt && !herbal ? new Color(1f, 0.15f, 0.1f, 0.35f + 0.25f * Mathf.Sin(t * 8f))
+                         : downed ? new Color(1f, 0.3f, 0.2f, 0.25f)
+                         : herbal ? new Color(0.45f, 1f, 0.55f, 0.4f + 0.2f * Mathf.Sin(t * 5f))
+                         : new Color(p.color.r, p.color.g, p.color.b, 0.3f);
             v.glow.enabled = p.state != PlayerState.Eliminated;
         }
 
