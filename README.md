@@ -106,12 +106,12 @@
 
 | | | |
 |:---:|:---:|:---:|
-| <img src="docs/img/incident_outbreak.png" width="260"><br>**感染爆發**<br>處理好：清光附近殭屍<br>沒處理：殭屍變多 | <img src="docs/img/incident_bridge.png" width="260"><br>**橋樑損毀**<br>沒有時間限制，修好之前橋一直斷著<br>修好：全員加速 | <img src="docs/img/incident_airdrop.png" width="260"><br>**物資空投**<br>處理好：全員補滿血<br>沒處理：引來殭屍 |
+| <img src="docs/img/incident_outbreak.png" width="260"><br>**感染爆發**<br>處理好：清光附近殭屍<br>沒處理：殭屍變多 | <img src="docs/img/incident_bridge.png" width="260"><br>**橋樑損毀**<br>沒有時間限制，修好之前橋一直斷著<br>修好：全員加速 | <img src="docs/img/incident_airdrop.png" width="260"><br>**物資空投**<br>處理好：全員補滿血<br>沒處理：什麼也拿不到 |
 | <img src="docs/img/incident_trapped.png" width="260"><br>**受困人群**<br>處理好：多 4 位民眾可以救<br>沒處理：變成殭屍 | <img src="docs/img/incident_guard.png" width="260"><br>**撤離點告急**<br>處理好：撤離點附近殭屍清光<br>沒處理：守軍倒下一分鐘 | <img src="docs/img/incident_heli.png" width="260"><br>**直升機故障**<br>處理好：零件需求變少（修好後改成少要一桶油）<br>沒處理：零件要更多 |
-| <img src="docs/img/incident_medevac.png" width="260"><br>**醫療隊抵達**<br>很多人倒地時才出現<br>處理好：倒下的人全部復活 | <img src="docs/img/incident_napalm.png" width="260"><br>**呼叫空襲**<br>處理好：炸掉附近殭屍<br>沒處理：引來殭屍 | <img src="docs/img/incident_decoy.png" width="260"><br>**聲波誘餌**<br>處理好：全城殭屍暫停<br>沒處理：引來殭屍 |
+| <img src="docs/img/incident_medevac.png" width="260"><br>**醫療隊抵達**<br>很多人倒地時才出現<br>處理好：倒下的人全部復活 | <img src="docs/img/incident_napalm.png" width="260"><br>**呼叫空襲**<br>處理好：炸平事件所在的那半張地圖，殭屍全清<br>沒處理：轟炸機不會來 | <img src="docs/img/incident_decoy.png" width="260"><br>**聲波誘餌**<br>處理好：全城殭屍暫停<br>沒處理：沒有效果 |
 | <img src="docs/img/incident_chest.png" width="260"><br>**神秘寶箱**<br>先到先拿，有零件和分數 | <img src="docs/img/incident_boss.png" width="260"><br>**殭屍王**<br>很硬，最好三個人一起打 | <img src="docs/img/generator_broken.png" width="260"><br>**發電機故障**<br>沒有時間限制，修好工廠才有電 |
-| <img src="docs/img/incident_herbs.png" width="260"><br>**草藥採集**（雨林）<br>處理好：全員多一個醫療包 | <img src="docs/img/incident_gas.png" width="260"><br>**加油站**（城市）<br>處理好：之後少要一桶油 | <img src="docs/img/incident_rubble.png" width="260"><br>**瓦礫堆**（廢墟）<br>處理好：挖出零件 |
-| <img src="docs/img/incident_bell.png" width="260"><br>**教堂鐘聲**（小城鎮）<br>處理好：鎮上的民眾自己去避難 | | |
+| <img src="docs/img/incident_herbs.png" width="260"><br>**草藥採集**（雨林）<br>處理好：30 秒內全員感染值不會上升，城市感染 -20% | <img src="docs/img/incident_gas.png" width="260"><br>**加油站補給**（城市）<br>處理好：少要 3 桶油<br>沒處理：原地爆炸，附近的人和殭屍都會被炸傷 | <img src="docs/img/incident_rubble.png" width="260"><br>**瓦礫堆**（廢墟）<br>處理好：挖出零件 |
+| <img src="docs/img/incident_bell.png" width="260"><br>**教堂鐘聲**（小城鎮）<br>處理好：全地圖的民眾都自己去避難 | | |
 
 地區事件只會出現在那個地區。地圖河的兩邊各是一種地區（雨林、城市、廢墟、小城鎮）。
 
