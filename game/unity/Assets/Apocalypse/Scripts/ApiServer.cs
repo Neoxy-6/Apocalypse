@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Specialized;
 using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Text;
 using System.Threading;
@@ -98,6 +99,17 @@ namespace Apocalypse
                 if (!req.done.Wait(5000)) { req.code = 503; req.response = "{\"ok\":false,\"error\":\"server busy\"}"; }
 
                 byte[] bytes = Encoding.UTF8.GetBytes(req.response);
+                // 狀態很大（幾十 KB），學員從 Colab 經過通道連進來時先壓縮，傳輸量少八成左右
+                string accept = ctx.Request.Headers["Accept-Encoding"] ?? "";
+                if (bytes.Length > 1024 && accept.IndexOf("gzip", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    using (var ms = new MemoryStream())
+                    {
+                        using (var gz = new GZipStream(ms, System.IO.Compression.CompressionLevel.Fastest, true)) gz.Write(bytes, 0, bytes.Length);
+                        bytes = ms.ToArray();
+                    }
+                    res.AddHeader("Content-Encoding", "gzip");
+                }
                 res.StatusCode = req.code;
                 res.ContentType = req.contentType;
                 res.ContentLength64 = bytes.Length;
