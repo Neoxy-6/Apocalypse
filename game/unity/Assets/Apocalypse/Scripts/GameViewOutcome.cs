@@ -118,24 +118,12 @@ namespace Apocalypse
             return h;
         }
 
-        // 守軍清圈、全員補滿血：從撤離點升起光柱，金光掃過整個安全區
+        // 守軍清圈、全員補滿血：從撤離點升起光柱，圓形衝擊波掃過整個安全區
         void ZoneBlessing(float t, float radius = -1f)
         {
             var pad = FacilityPos(Sim.extraction);
             var center = Sim.map.nodes[Sim.extraction].pos;
             float R = radius > 0f ? radius : Sim.ZoneRadius, d = R * 2f;
-            var size = Sim.map.Size;
-            // 光線只畫到地圖邊緣，不要射出地圖外
-            float ToEdge(float deg)
-            {
-                var dir = new Vector2(Mathf.Sin(deg * Mathf.Deg2Rad), Mathf.Cos(deg * Mathf.Deg2Rad));
-                float m = 1.5f, best = R;
-                if (dir.x > 1e-4f) best = Mathf.Min(best, (size.x + m - pad.x) / dir.x);
-                if (dir.x < -1e-4f) best = Mathf.Min(best, (-m - pad.x) / dir.x);
-                if (dir.y > 1e-4f) best = Mathf.Min(best, (size.y + m - pad.y) / dir.y);
-                if (dir.y < -1e-4f) best = Mathf.Min(best, (-m - pad.y) / dir.y);
-                return Mathf.Max(0f, best);
-            }
             Color gold = new Color(1f, 0.85f, 0.35f), pale = new Color(1f, 0.97f, 0.8f);
             var o = NewOutcome("zone_blessing", 3.2f, t);
             var root = o.root;
@@ -144,13 +132,10 @@ namespace Apocalypse
             var pillar = Part(root, PrimitiveType.Cylinder, pale, Vector3.zero, Vector3.one, default, true).transform;
             var halo = Part(root, PrimitiveType.Cylinder, gold, Vector3.zero, Vector3.one, default, true).transform;
             pillar.position = W(pad, 6f); halo.position = W(pad, 6f);
-            var rays = Enumerable.Range(0, 16).Select(i =>
-            {
-                var g = new GameObject("ray").transform; g.SetParent(root, false);
-                g.position = W(pad, 0.15f); g.rotation = Quaternion.Euler(0, i * 22.5f, 0);
-                var bar = Part(g, PrimitiveType.Cube, i % 2 == 0 ? pale : gold, Vector3.zero, Vector3.one, default, true).transform;
-                return (g, bar);
-            }).ToArray();
+            // 衝擊波：每道由幾圈疊成一條粗光環，前緣白、後面金
+            float[] starts = { 0f, 0.16f, 0.3f };
+            var shocks = starts.Select(_ => Enumerable.Range(0, 6).Select(j => FxRing(root, pad, j < 2 ? pale : gold, 1f, 0.1f + j * 0.004f)).ToArray()).ToArray();
+            var flash = FxGlow(root, pad, new Color(1f, 0.92f, 0.6f, 0f), 1f);
             var glow = FxGlow(root, center, new Color(1f, 0.85f, 0.4f, 0f), d * 1.15f);
             var core = FxGlow(root, pad, new Color(1f, 0.95f, 0.7f, 0f), 7f);
             var waves = Enumerable.Range(0, 3).Select(_ => FxRing(root, pad, gold, 1f, 0.1f)).ToArray();
@@ -158,7 +143,8 @@ namespace Apocalypse
             var motes = Particles(root, W(center, 0.2f), new Color(1f, 0.95f, 0.6f, 1f), new Color(1f, 0.8f, 0.3f, 1f), 60f, 2.2f, 0.6f, 0.14f, -0.15f, new Vector3(d * 0.45f, 0.1f, d * 0.45f), 0.3f);
 
             Burst(W(pad, 0.3f), pale, gold, 90, 5f, 0.2f, 1.6f, -0.3f, 0.6f);
-            Burst(W(pad, 0.1f), gold, new Color(1f, 0.85f, 0.35f, 0.6f), 80, 7f, 0.16f, 1f, 0f, 0.8f, true);
+            Burst(W(pad, 0.15f), pale, gold, 160, R / 0.9f, 0.3f, 0.9f, 0f, 0.6f, true);
+            Burst(W(pad, 0.1f), gold, new Color(1f, 0.7f, 0.25f, 0.7f), 120, R / 1.4f, 0.45f, 1.3f, 0f, 0.5f, true);
             foreach (var q in Sim.players.Where(q => q.state == PlayerState.Active))
             {
                 var at = W(Shown(q), 0.2f);
@@ -173,13 +159,21 @@ namespace Apocalypse
                 pillar.localScale = new Vector3(w, 6f, w);
                 halo.localScale = new Vector3(w * 2.1f, 6f * rise, w * 2.1f) * (0.7f + 0.3f * fade);
                 halo.gameObject.SetActive(fade > 0.05f && Mathf.Repeat(now * 10f, 1f) < 0.6f);
-                foreach (var (g, bar) in rays)
+                for (int s = 0; s < shocks.Length; s++)
                 {
-                    g.rotation = Quaternion.Euler(0, g.eulerAngles.y + Time.unscaledDeltaTime * 25f, 0);
-                    float len = ToEdge(g.eulerAngles.y) * Mathf.Clamp01(k * 2.2f);
-                    bar.localPosition = new Vector3(0, 0, len * 0.5f);
-                    bar.localScale = new Vector3(0.22f * fade, 0.03f, len);
+                    float q = Mathf.Clamp01((k - starts[s]) / 0.42f);
+                    float front = d * (1f - (1f - q) * (1f - q)) * (s == 0 ? 1f : 0.85f - s * 0.1f);
+                    float a = q <= 0f ? 0f : (1f - q * q) * (s == 0 ? 1f : 0.6f);
+                    for (int j = 0; j < shocks[s].Length; j++)
+                    {
+                        var c = j < 2 ? pale : gold;
+                        shocks[s][j].transform.localScale = Vector3.one * Mathf.Max(0.01f, front - j * 0.12f * (1f + q * 3f));
+                        shocks[s][j].color = new Color(c.r, c.g, c.b, a * (1f - j * 0.12f));
+                    }
                 }
+                float fq = Mathf.Clamp01(k / 0.42f);
+                flash.transform.localScale = Vector3.one * d * 1.1f * (1f - (1f - fq) * (1f - fq));
+                flash.color = new Color(1f, 0.92f, 0.6f, 0.55f * (1f - fq));
                 for (int i = 0; i < waves.Length; i++) Wave(waves[i], new Color(1f, 0.85f, 0.35f, 0.95f), Mathf.Clamp01(k * 1.8f - i * 0.18f), 1f, d);
                 glow.color = new Color(1f, 0.85f, 0.4f, 0.45f * Mathf.Clamp01(k * 4f) * fade);
                 core.color = new Color(1f, 0.95f, 0.7f, 0.8f * fade);
