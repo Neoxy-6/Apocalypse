@@ -985,7 +985,7 @@ namespace Apocalypse
             if (taskTimer > 0 || (cfg.escape && readyAt >= 0)) return;
             taskTimer = cfg.taskInterval / (map.Scale * SquadTaskScale * (1f + 0.35f * Phase));
             UseStream(StreamTask, taskSlot++);
-            SpawnTask(rng.NextDouble() < 0.15 + 0.07 * Phase, cfg.announceLead);
+            SpawnTask(rng.NextDouble() < cfg.urgentChance + cfg.urgentChancePerPhase * Phase, cfg.announceLead);
         }
 
         public GameTask SpawnTask(bool urgent, float lead)
@@ -1053,7 +1053,7 @@ namespace Apocalypse
             if (urgent)
             {
                 t.urgent = true;
-                t.bonus = Mathf.RoundToInt(baseReward * 0.6f);
+                t.bonus = Mathf.RoundToInt(baseReward * cfg.urgentBonusRatio);
                 t.deadline = availableAt + (d + 15f) / cfg.playerSpeed * 1.5f + 25f;
                 string when = lead > 0 ? $"{lead:0} 秒後開放，" : "";
                 Log("urgent", $"緊急委託 #{t.id}：{(rescue ? "救援" : cfg.escape ? "零件" : "配送")} {origin}→{dest}，{when}期限 {Clock(t.deadline)}，獎金 +{t.bonus}");

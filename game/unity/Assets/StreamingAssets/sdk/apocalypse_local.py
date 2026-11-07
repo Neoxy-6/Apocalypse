@@ -13,9 +13,9 @@ PALETTE = ["#4DC2F7", "#FF7042", "#BA68C7", "#FFD64F", "#66BA6B", "#F06191", "#4
 
 DEFAULTS = dict(
     mapCols=10, mapRows=8, bridges=2,
-    batchChance=0.6, batchMin=3, batchMax=5, batchBonusRatio=1.0, taskInterval=9.0, announceLead=30.0,
+    batchChance=0.6, batchMin=3, batchMax=5, batchBonusRatio=1.0, taskInterval=9.0, announceLead=60.0,
     seed=42, matchDuration=600.0, randomBots=0, greedyBots=0, botReactionTime=1.0,
-    planCooldown=15.0, maxPlanSteps=200, capacity=10, playerSpeed=3.0, loadSpeedPenalty=0.05, fuelWeight=4, weaponWeight=4, weaponShots=8, weaponStock=2, killReward=5, weaponRange=3.5, weaponInterval=1.2,
+    planCooldown=15.0, maxPlanSteps=200, capacity=14, playerSpeed=3.0, loadSpeedPenalty=0.05, fuelWeight=4, weaponWeight=1, weaponShots=20, weaponStock=4, killReward=8, weaponRange=4.5, weaponInterval=1.2,
     downedTime=15.0, survivalBonus=120, reviveBonus=60, respawnPenalty=15, respawnHp=70.0,
     cityRate=0.55, spreadAmount=0.15, spreadGrow=0.02,
 
@@ -36,7 +36,8 @@ DEFAULTS = dict(
     partWeightReward=12.0, rescueRewardMul=2.0, incidentRewardMul=1.0,
 
     partDecay=0.0,
-    comboWindow=5.0, comboStep=10, comboMax=8,
+    urgentChance=0.3, urgentChancePerPhase=0.07, urgentBonusRatio=1.2,
+    comboWindow=5.0, comboStep=5, comboMax=8,
     zombieSpeed=1.4, zombieSpeedPerPhase=0.2, zombieSight=5.5, zombieAttackRange=0.9,
     zombieDamage=5.5, zombieInfection=2.5, zombieChaseMul=1.25, zombieCapBase=6.0, zombieCapGrowth=40.0, zombieSpawnMul=1.6,
     actionNoiseRadius=10.0, actionNoiseDuration=12.0, survivorNoiseRadius=8.0, screamRadius=12.0,
@@ -998,7 +999,7 @@ class Sim:
             return
         self.task_timer = self.cfg["taskInterval"] / (self.map.scale * self.task_scale * (1 + 0.35 * self.phase))
         self.use_stream(S_TASK, self.task_slot); self.task_slot += 1
-        self.spawn_task(self.rng.next_double() < 0.15 + 0.07 * self.phase, self.cfg["announceLead"])
+        self.spawn_task(self.rng.next_double() < self.cfg["urgentChance"] + self.cfg["urgentChancePerPhase"] * self.phase, self.cfg["announceLead"])
 
     def spawn_task(self, urgent, lead):
         m, rng, c, ph = self.map, self.rng, self.cfg, self.phase
@@ -1048,7 +1049,7 @@ class Sim:
                  status="announced" if lead > 0 else "open")
         if urgent:
             t.urgent = True
-            t.bonus = _round(base * 0.6)
+            t.bonus = _round(base * c["urgentBonusRatio"])
             t.deadline = available_at + (d + 15) / c["playerSpeed"] * 1.5 + 25
         self.tasks.append(t)
         return t

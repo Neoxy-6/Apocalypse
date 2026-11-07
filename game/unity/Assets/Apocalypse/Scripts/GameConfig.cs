@@ -23,7 +23,7 @@ namespace Apocalypse
         public int batchMin = 3, batchMax = 5;
         public float batchBonusRatio = 1.0f;
         public float taskInterval = 9f;
-        public float announceLead = 30f;
+        public float announceLead = 60f;
 
         public float cityRate = 0.55f;
         public float spreadAmount = 0.15f;
@@ -65,8 +65,9 @@ namespace Apocalypse
 
         public float partWeightReward = 12f, rescueRewardMul = 2f, incidentRewardMul = 1f;
         public float partDecay = 0f;
+        public float urgentChance = 0.3f, urgentChancePerPhase = 0.07f, urgentBonusRatio = 1.2f;
         public float comboWindow = 5f;
-        public int comboStep = 10, comboMax = 8;
+        public int comboStep = 5, comboMax = 8;
         public float difficulty = 1.2f;
         public float earliestDepart = 480f;
         public float departDelay = 60f;
@@ -91,12 +92,12 @@ namespace Apocalypse
 
         public float planCooldown = 15f;
         public int maxPlanSteps = 200;
-        public int capacity = 10;
+        public int capacity = 14;
         public float playerSpeed = 3f;
         public float loadSpeedPenalty = 0.05f;
         public int fuelWeight = 4;
-        public int weaponWeight = 4, weaponShots = 8, weaponStock = 2, killReward = 5;
-        public float weaponRange = 3.5f, weaponInterval = 1.2f;
+        public int weaponWeight = 1, weaponShots = 20, weaponStock = 4, killReward = 8;
+        public float weaponRange = 4.5f, weaponInterval = 1.2f;
         public float downedTime = 15f;
         public int respawnPenalty = 15;
         public float respawnHp = 70f;
