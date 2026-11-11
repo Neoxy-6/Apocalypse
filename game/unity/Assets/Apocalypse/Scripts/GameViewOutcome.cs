@@ -118,7 +118,7 @@ namespace Apocalypse
             return h;
         }
 
-        // 守軍清圈、全員補滿血：從撤離點升起光柱，圓形衝擊波掃過整個安全區
+        // 守軍清圈、全員補滿血：圓形衝擊波從撤離點掃過整個安全區
         void ZoneBlessing(float t, float radius = -1f)
         {
             var pad = FacilityPos(Sim.extraction);
@@ -129,9 +129,6 @@ namespace Apocalypse
             var root = o.root;
             Shake(0.35f);
 
-            var pillar = Part(root, PrimitiveType.Cylinder, pale, Vector3.zero, Vector3.one, default, true).transform;
-            var halo = Part(root, PrimitiveType.Cylinder, gold, Vector3.zero, Vector3.one, default, true).transform;
-            pillar.position = W(pad, 6f); halo.position = W(pad, 6f);
             // 衝擊波：每道由幾圈疊成一條粗光環，前緣白、後面金
             float[] starts = { 0f, 0.16f, 0.3f };
             var shocks = starts.Select(_ => Enumerable.Range(0, 6).Select(j => FxRing(root, pad, j < 2 ? pale : gold, 1f, 0.1f + j * 0.004f)).ToArray()).ToArray();
@@ -142,7 +139,6 @@ namespace Apocalypse
             var edge = FxRing(root, center, pale, d, 0.08f);
             var motes = Particles(root, W(center, 0.2f), new Color(1f, 0.95f, 0.6f, 1f), new Color(1f, 0.8f, 0.3f, 1f), 60f, 2.2f, 0.6f, 0.14f, -0.15f, new Vector3(d * 0.45f, 0.1f, d * 0.45f), 0.3f);
 
-            Burst(W(pad, 0.3f), pale, gold, 90, 5f, 0.2f, 1.6f, -0.3f, 0.6f);
             Burst(W(pad, 0.15f), pale, gold, 160, R / 0.9f, 0.3f, 0.9f, 0f, 0.6f, true);
             Burst(W(pad, 0.1f), gold, new Color(1f, 0.7f, 0.25f, 0.7f), 120, R / 1.4f, 0.45f, 1.3f, 0f, 0.5f, true);
             foreach (var q in Sim.players.Where(q => q.state == PlayerState.Active))
@@ -154,11 +150,7 @@ namespace Apocalypse
 
             o.tick = (k, now) =>
             {
-                float rise = Mathf.Clamp01(k * 5f), fade = 1f - Mathf.Clamp01((k - 0.55f) / 0.45f);
-                float w = (0.9f + 0.15f * Mathf.Sin(now * 18f)) * rise * fade;
-                pillar.localScale = new Vector3(w, 6f, w);
-                halo.localScale = new Vector3(w * 2.1f, 6f * rise, w * 2.1f) * (0.7f + 0.3f * fade);
-                halo.gameObject.SetActive(fade > 0.05f && Mathf.Repeat(now * 10f, 1f) < 0.6f);
+                float fade = 1f - Mathf.Clamp01((k - 0.55f) / 0.45f);
                 for (int s = 0; s < shocks.Length; s++)
                 {
                     float q = Mathf.Clamp01((k - starts[s]) / 0.42f);

@@ -61,15 +61,11 @@ namespace Apocalypse
         readonly Dictionary<int, Pile> piles = new Dictionary<int, Pile>();
 
         int follow = -1;
-        bool director = true;
-        int directorPick = -1;
-        Vector2? directorSpot;
-        float directorTimer;
         // 鏡頭遠近都用「看到整張地圖的大小」當基準，大地圖小地圖看起來比例一樣。
-        // userZoom 是滾輪設定的遠近（整張地圖的幾成），設了之後自動導播和手動都用它，不會互相搶。
+        // userZoom 是滾輪設定的遠近（整張地圖的幾成）。
         float? userZoom;
         float overviewSize = 27f;
-        const float DirectorFar = 0.335f, DirectorNear = 0.28f, SpotFar = 0.317f, SpotNear = 0.26f, FollowZoom = 0.22f;
+        const float FollowZoom = 0.22f;
         bool clean;
 
         Font font;
@@ -511,7 +507,7 @@ namespace Apocalypse
                 v.ring.enabled = alive;
                 v.route.enabled = alive && p.state == PlayerState.Active;
                 v.ring.transform.position = W(Shown(p), 0.04f + GroundH(Shown(p)));
-                var rc = p.color; rc.a = p.id == follow || p.id == directorPick ? 0.9f : 0.45f;
+                var rc = p.color; rc.a = p.id == follow ? 0.9f : 0.45f;
                 v.ring.color = rc;
                 if (v.route.enabled) DrawRoute(p, v.route);
 
@@ -587,7 +583,7 @@ namespace Apocalypse
                 AnimateZombie(v, z, Time.unscaledTime);
                 v.ring.transform.position = W(Shown(z), 0.035f + GroundH(Shown(z)));
 
-                bool show = !clean || z.mode != ZombieMode.Wander;
+                bool show = !clean || z.mode != ZombieMode.Patrol;
                 v.intent.enabled = show;
                 if (!show) continue;
                 routePts.Clear();
@@ -596,7 +592,7 @@ namespace Apocalypse
                 v.intent.positionCount = routePts.Count;
                 v.intent.SetPositions(routePts.ToArray());
                 var c = z.mode == ZombieMode.Chase ? new Color(1f, 0.25f, 0.2f, 0.8f)
-                      : z.mode == ZombieMode.Attracted ? new Color(1f, 0.85f, 0.3f, 0.6f)
+                      : z.mode == ZombieMode.Return ? new Color(1f, 0.85f, 0.3f, 0.6f)
                       : new Color(0.6f, 0.65f, 0.6f, 0.25f);
                 v.intent.startColor = c; c.a *= 0.2f; v.intent.endColor = c;
             }
@@ -735,7 +731,6 @@ namespace Apocalypse
                 if (cut < 0) cut = text.IndexOf('：');
                 if (cut > 0 && cut < text.Length - 1) text = text.Substring(0, cut + 1);
                 banners.Add(new Banner { text = text, color = EventColor(e.type), until = Time.unscaledTime + 4f });
-                if (director && e.node >= 0) CutTo(Sim.map.nodes[e.node].pos);
             }
             if (events.Count > 0) lastSeen = events[events.Count - 1];
             Milestones();
@@ -766,7 +761,6 @@ namespace Apocalypse
                     if (Sim.departAt - Sim.time <= s && departMark > s) { departMark = s; Add($"{s} 秒後起飛！還在外面的快回撤離點", s <= 10 ? Bad : Warn); }
             if (!lastMinuteAnnounced && !Sim.ClockStopped && Sim.TimeLeft <= 60f) { lastMinuteAnnounced = true; Add(Sim.departAt >= 0 ? "最後 1 分鐘，快回撤離點！"
                     : Sim.readyAt >= 0 ? $"最後 1 分鐘！油桶還差 {Mathf.Max(0, Sim.fuelRequired - Sim.fuel)} 桶"
-                    : Sim.parts >= Sim.partsRequired ? "最後 1 分鐘！直升機組裝中"
                     : "最後 1 分鐘！零件還差 " + (Sim.partsRequired - Sim.parts), Warn); }
         }
 
@@ -790,17 +784,8 @@ namespace Apocalypse
             Vector2 target = center + right2 * (overview * cam.aspect * 0.08f) + up2 * (overview * 0.06f);
             float size = overview;
 
-            if (director && Sim.status == MatchStatus.Running)
-            {
-                directorTimer -= Time.unscaledDeltaTime;
-                shotAge += Time.unscaledDeltaTime;
-                if (directorTimer <= 0) NextShot();
-            }
-            else { directorPick = -1; directorSpot = null; overviewShot = false; shotAge = 0f; }
-
-            int focus = follow >= 0 ? follow : directorPick;
+            int focus = follow;
             var fp = Sim.PlayerById(focus);
-            float push = Mathf.Clamp01(shotAge / 7f);
             if (fp != null && fp.state != PlayerState.Eliminated)
             {
 
@@ -808,12 +793,11 @@ namespace Apocalypse
                 lastFocusId = focus; lastFocusPos = fp.pos;
                 lead = Vector2.Lerp(lead, Vector2.ClampMagnitude(vel * 0.5f, 1.4f), 1f - Mathf.Exp(-2f * Time.unscaledDeltaTime));
                 target = Shown(fp) + lead;
-                size = overview * (follow >= 0 ? FollowZoom : Mathf.Lerp(DirectorFar, DirectorNear, push));
+                size = overview * FollowZoom;
             }
-            else if (follow < 0 && directorSpot.HasValue) { target = directorSpot.Value; size = overview * Mathf.Lerp(SpotFar, SpotNear, push); }
             PanCamera();
-            if (manualTarget.HasValue && follow < 0 && !director) { target = manualTarget.Value; size = overview * manualZoom; }
-            if (focusIncident >= 0 && follow < 0 && !director)
+            if (manualTarget.HasValue && follow < 0) { target = manualTarget.Value; size = overview * manualZoom; }
+            if (focusIncident >= 0 && follow < 0)
             {
                 var fi = Sim.incidents.FirstOrDefault(i => i.id == focusIncident && i.status == "active");
                 if (fi != null) { target = Sim.map.nodes[fi.node].pos; size = overview * FollowZoom; }
@@ -834,23 +818,6 @@ namespace Apocalypse
             else if (userZoom.HasValue) size = overview * userZoom.Value;
             if (galleryTarget.HasValue) { target = galleryTarget.Value; size = gallerySize; }
             ApplyCamera(target, size);
-        }
-
-        int PickDirectorTarget()
-        {
-            int best = -1;
-            float bestScore = 2.5f;
-            var leaderTeam = Sim.Ranking().FirstOrDefault();
-            foreach (var p in Sim.players)
-            {
-                if (p.state == PlayerState.Eliminated) continue;
-                float s = Sim.zombies.Count(z => Vector2.Distance(z.pos, p.pos) < 6f) * 1.5f;
-                if (p.state == PlayerState.Downed) s += 6f;
-                if (p.team == leaderTeam) s += 1f;
-                if (p.cargo.Count > 0) s += 0.5f;
-                if (s > bestScore) { bestScore = s; best = p.id; }
-            }
-            return best;
         }
 
         void EnsureStyles()
@@ -939,9 +906,8 @@ namespace Apocalypse
                     if (alive.Count == 0) { follow = -1; break; }
                     int i = alive.IndexOf(follow);
                     follow = i + 1 < alive.Count ? alive[i + 1] : -1;
-                    director = false; manualTarget = null;
+                    manualTarget = null;
                     break;
-                case KeyCode.C: director = !director; follow = -1; manualTarget = null; focusIncident = -1; break;
                 case KeyCode.LeftArrow: CycleStudent(-1); break;
                 case KeyCode.RightArrow: CycleStudent(1); break;
                 case KeyCode.UpArrow: CycleIncident(-1); break;
@@ -951,7 +917,7 @@ namespace Apocalypse
                     if (Screen.fullScreen) Screen.SetResolution(1600, 900, FullScreenMode.Windowed);
                     else Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, FullScreenMode.FullScreenWindow);
                     break;
-                case KeyCode.Alpha0: case KeyCode.Escape: follow = -1; director = false; userZoom = null; manualTarget = null; focusIncident = -1; break;
+                case KeyCode.Alpha0: case KeyCode.Escape: follow = -1; userZoom = null; manualTarget = null; focusIncident = -1; break;
                 case KeyCode.P: gm.speed = gm.speed == 0 ? 1 : 0; break;
                 case KeyCode.Alpha1: gm.speed = 1; break;
                 case KeyCode.Alpha2: gm.speed = 2; break;
@@ -1132,7 +1098,6 @@ namespace Apocalypse
                 int alive = Sim.players.Count(p => p.state != PlayerState.Eliminated);
                 string heli = Sim.departAt >= 0 ? $"<color={Good}>起飛倒數 {Clock(Mathf.Max(0f, Sim.departAt - Sim.time))}</color>"
                             : Sim.readyAt >= 0 ? $"<color=#ff7043>加油中</color>  <color={Muted}>存活 {alive}/{Sim.players.Count}</color>"
-                            : Sim.parts >= Sim.partsRequired && Sim.partsRequired > 0 ? $"<color=#ffd54f>直升機組裝中 {Clock(Mathf.Max(0f, Sim.RepairGate - Sim.time))}</color>"
                             : $"<color={Muted}>直升機修理中</color>";
                 bool shrinking = Sim.ZoneRadius < Sim.zoneMax - 0.01f;
                 string zone = shrinking ? $"<color={Bad}>安全區縮小中</color>" : $"<color={Muted}>安全區 {Clock(gm.cfg.zoneStart * gm.cfg.matchDuration / 600f - Sim.time)} 後縮小</color>";
@@ -1166,7 +1131,6 @@ namespace Apocalypse
             if (gm.cfg.escape)
             {
                 string heliText = Sim.departAt >= 0 ? $"<color=#a5d6a7>直升機 {Clock(Mathf.Max(0f, Sim.departAt - Sim.time))} 後起飛！</color>"
-                                : Sim.readyAt < 0 && Sim.parts >= Sim.partsRequired && Sim.partsRequired > 0 ? $"<color=#ffd54f>直升機組裝中 {Clock(Mathf.Max(0f, Sim.RepairGate - Sim.time))}</color>"
                                 : "<color=#aaa>修好直升機才能逃</color>";
                 GUI.Label(new Rect(r.x + 330, r.y + 6, 400, 24), $"零件  <b>{Mathf.Min(Sim.parts, Sim.partsRequired)} / {Sim.partsRequired}</b>   {heliText}", label);
                 Bar(new Rect(r.x + 330, r.y + 38, 380, 14), Sim.partsRequired > 0 ? (float)Sim.parts / Sim.partsRequired : 0f,
@@ -1184,7 +1148,7 @@ namespace Apocalypse
             Box(new Rect(r.x + 330, r.y + 55, 380 * Mathf.Clamp01(Sim.time / gm.cfg.matchDuration), 3), new Color(1, 1, 1, 0.6f));
 
             string spd = gm.speed == 0 ? "<color=#ff5252>暫停</color>" : gm.speed > 1 ? $"×{gm.speed:0}" : "";
-            string cam = follow >= 0 ? "跟拍" : director ? "導播" : manualTarget.HasValue ? "手動" : "全景";
+            string cam = follow >= 0 ? "跟拍" : manualTarget.HasValue ? "手動" : "全景";
             GUI.Label(new Rect(r.x + 730, r.y + 6, 120, 24), $"<color=#aaa>{cam}</color> {spd}", label);
             GUI.Label(new Rect(r.x + 730, r.y + 34, 120, 24), $"<color=#7cb342>殭屍 {Sim.zombies.Count}</color>", label);
         }
@@ -1325,8 +1289,8 @@ namespace Apocalypse
         {
             switch (type)
             {
-                case "done": case "heli": case "batch": case "revive": case "respawn": case "solved": return "✓";
-                case "combo": return "★";
+                case "done": case "heli": case "batch": case "revive": case "respawn": case "solved": case "process": return "✓";
+                case "combo": case "set": return "★";
                 case "urgent": case "supply": return "★";
                 case "down": case "fail": case "eliminated": case "incident_fail": return "✕";
                 case "outbreak": case "failure": case "incident": case "roadblock": return "▲";
@@ -1342,12 +1306,12 @@ namespace Apocalypse
                 case "outbreak": case "eliminated": case "fail": return "#ff5252";
                 case "down": return "#ff8a65";
                 case "failure": return "#ffab40";
-                case "done": case "revive": return "#a5d6a7";
+                case "done": case "revive": case "process": return "#a5d6a7";
                 case "supply": case "repair": return "#81d4fa";
                 case "batch": return "#ffcc80";
                 case "incident": return "#ffab40";
                 case "solved": return "#69f0ae";
-                case "combo": return "#ffd54f";
+                case "combo": case "set": return "#ffd54f";
                 case "incident_fail": return "#ff5252";
                 case "heli": return "#69f0ae";
                 default: return "#e0e0e0";
@@ -1357,7 +1321,7 @@ namespace Apocalypse
         void Help(float W, float H)
         {
             GUI.Label(new Rect(W - 760, H - 34, 744, 24),
-                "<color=#777>Space 開始／結束後回準備畫面　WASD／拖曳 移動鏡頭　←→ 看學員　↑↓ 看事件　滾輪 縮放　C 自動導播　0 全景　1-4 速度　P 暫停　H 乾淨轉播模式　F11 全螢幕</color>",
+                "<color=#777>Space 開始／結束後回準備畫面　WASD／拖曳 移動鏡頭　←→ 看學員　↑↓ 看事件　滾輪 縮放　0 全景　1-4 速度　P 暫停　H 乾淨轉播模式　F11 全螢幕</color>",
                 new GUIStyle(small) { alignment = TextAnchor.MiddleRight });
         }
 

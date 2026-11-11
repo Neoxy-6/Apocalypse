@@ -106,7 +106,6 @@ namespace Apocalypse
             if (fw > bar.height + 4) Pill(new Rect(bar.x + 12, bar.y + 6, fw - 24, 6), new Color(1, 1, 1, 0.22f));
 
             string tag = fuelPhase ? $"油桶 {Mathf.Min(Sim.fuel, Sim.fuelRequired)}/{Sim.fuelRequired}"
-                       : Sim.parts >= Sim.partsRequired && Sim.partsRequired > 0 ? $"直升機組裝中 {Clock(Mathf.Max(0f, Sim.RepairGate - Sim.time))}"
                        : $"零件 {Mathf.Min(Sim.parts, Sim.partsRequired)}/{Sim.partsRequired}";
             float tw = wcTag.CalcSize(new GUIContent(tag)).x + 36;
             var tagR = new Rect(bar.x + 26, bar.yMax + 8, tw, 32);
@@ -289,6 +288,8 @@ namespace Apocalypse
                 case "outbreak": case "failure": return ("警報", new Color(1f, 0.55f, 0.42f));
                 case "roadblock": return ("封路", new Color(1f, 0.55f, 0.42f));
                 case "combo": return ("連續得分", new Color(0.98f, 0.85f, 0.50f));
+                case "set": return ("套件", new Color(0.98f, 0.85f, 0.50f));
+                case "process": return ("加工", new Color(0.55f, 0.85f, 0.65f));
                 case "supply": case "repair": case "batch": return ("物資", WcBeige);
                 case "join": return ("加入", new Color(0.62f, 0.78f, 0.95f));
                 default: return ("消息", new Color(0.66f, 0.60f, 0.61f));

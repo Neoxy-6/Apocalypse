@@ -66,17 +66,9 @@ namespace Apocalypse
             if (!v.body) return;
             if (Sim.zoneClearedAt >= 0f && Sim.time - Sim.zoneClearedAt < 0.3f)
             {
-                // 被守軍清圈：化成金光往上飄
+                // 被守軍清圈：化成金色光點散開
                 var at = v.body.transform.position;
                 Burst(at + Vector3.up * 0.4f, new Color(1f, 0.95f, 0.6f, 1f), new Color(1f, 0.8f, 0.3f, 1f), 26, 1.4f, 0.2f, 1.3f, -0.9f, 0.3f);
-                var col = NewOutcome("holy_zombie", 1.1f, Time.unscaledTime);
-                var beam = Part(col.root, PrimitiveType.Cylinder, new Color(1f, 0.92f, 0.55f), Vector3.zero, Vector3.one, default, true).transform;
-                col.tick = (k, now) =>
-                {
-                    float w = 0.35f * (1f - k);
-                    beam.localScale = new Vector3(w, 2.2f, w);
-                    beam.position = at + Vector3.up * 2.2f;
-                };
             }
             Burst(v.body.transform.position + Vector3.up * 0.5f, new Color(0.5f, 0.6f, 0.4f, 0.8f), new Color(0.3f, 0.35f, 0.3f, 0.6f), 14, 1.2f, 0.3f, 0.8f, 0.2f, 0.25f);
             dyingZombies.Add((v, Time.unscaledTime));

@@ -8,41 +8,12 @@ namespace Apocalypse
     public partial class GameView
     {
 
-        float shotAge, shakeAmp, lastCut = -10f;
-        int shotCount, lastPicked = -1, lastFocusId = -1;
-        bool overviewShot;
+        float shakeAmp, lastCut = -10f;
+        int lastFocusId = -1;
         Vector2 lastFocusPos, lead;
         Vector3? camBase;
 
-        void NextShot()
-        {
-            shotAge = 0f; directorSpot = null; lastCut = Time.unscaledTime;
-            shotCount++;
-            if (shotCount % 3 == 0) { overviewShot = true; directorPick = -1; directorTimer = 4f; return; }
-            overviewShot = false;
-            directorPick = PickDirectorTarget();
-            lastPicked = directorPick;
-            directorTimer = directorPick >= 0 ? 7f : 4f;
-        }
-
-        void CutTo(Vector2 spot, float hold = 6f)
-        {
-            directorSpot = spot; directorPick = -1; directorTimer = hold;
-            shotAge = 0f; overviewShot = false; lastCut = Time.unscaledTime;
-        }
-
         void Shake(float amount) => shakeAmp = Mathf.Max(shakeAmp, amount);
-
-        float DirectorScore(Player p)
-        {
-            float s = Sim.zombies.Count(z => Vector2.Distance(z.pos, p.pos) < 6f) * 1.5f;
-            if (p.state == PlayerState.Downed) s += 6f;
-            if (p.cargo.Count > 0) s += 0.8f;
-            if (Sim.incidents.Any(i => i.status == "active" && Vector2.Distance(Sim.map.nodes[i.node].pos, p.pos) < 3f)) s += 2.5f;
-            if (p.id == lastPicked) s -= 3f;
-            s += Random.value * 1.5f;
-            return s;
-        }
 
         Vector2? manualTarget;
         int focusIncident = -1;
@@ -53,7 +24,7 @@ namespace Apocalypse
             if (ids.Count == 0) return;
             int i = ids.IndexOf(follow);
             follow = ids[i < 0 ? (step > 0 ? 0 : ids.Count - 1) : (i + step + ids.Count) % ids.Count];
-            director = false; manualTarget = null; focusIncident = -1;
+            manualTarget = null; focusIncident = -1;
         }
 
         void CycleIncident(int step)
@@ -62,7 +33,7 @@ namespace Apocalypse
             if (list.Count == 0) return;
             int i = list.FindIndex(x => x.id == focusIncident);
             focusIncident = list[i < 0 ? (step > 0 ? 0 : list.Count - 1) : (i + step + list.Count) % list.Count].id;
-            director = false; follow = -1; manualTarget = null;
+            follow = -1; manualTarget = null;
             lastCut = Time.unscaledTime;
         }
         float manualZoom = 0.37f;
@@ -90,7 +61,7 @@ namespace Apocalypse
                 manualTarget = new Vector2(look.x, look.z);
                 manualZoom = cam.orthographicSize / overviewSize;
             }
-            director = false; follow = -1; focusIncident = -1;
+            follow = -1; focusIncident = -1;
             var right = cam.transform.right; var up = cam.transform.up;
             var r2 = new Vector2(right.x, right.z).normalized;
             var u2 = new Vector2(up.x, up.z).normalized;
@@ -109,7 +80,7 @@ namespace Apocalypse
             float dt = Time.unscaledDeltaTime;
             var desired = W(target) - cam.transform.forward * 120f;
             if (!camBase.HasValue) camBase = cam.transform.position;
-            float rate = manualTarget.HasValue && follow < 0 && !director ? 12f : Time.unscaledTime - lastCut < 0.8f ? 7f : 2.5f;
+            float rate = manualTarget.HasValue && follow < 0 ? 12f : Time.unscaledTime - lastCut < 0.8f ? 7f : 2.5f;
             float k = galleryMode ? 1f : 1f - Mathf.Exp(-rate * dt);
             camBase = Vector3.Lerp(camBase.Value, desired, k);
             cam.orthographicSize = Mathf.Lerp(cam.orthographicSize, size, k);
