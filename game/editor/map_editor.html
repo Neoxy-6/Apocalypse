@@ -250,6 +250,81 @@ ul.checks li.bad { color: #ffb3b3; }
     if (close) add("warn", `${close} 對路口距離不到 2.5，建築會擠在一起`);
     const lonely = map.nodes.filter((_, i) => !an.adj[i].length).length;
     if (lonely && n > 1) add("warn", `${lonely} 個路口沒有接任何道路`);
+    if (ex === 1 && an.connected) out.push(...gameplayChecks(an));
+    return out;
+  }
+
+  // 走路距離（照道路長度），從 src 到每個路口
+  function pathDist(an, src) {
+    const n = map.nodes.length, d = new Array(n).fill(Infinity), done = new Array(n).fill(false);
+    d[src] = 0;
+    for (let k = 0; k < n; k++) {
+      let u = -1;
+      for (let i = 0; i < n; i++) if (!done[i] && (u < 0 || d[i] < d[u])) u = i;
+      if (u < 0 || d[u] === Infinity) break;
+      done[u] = true;
+      for (const [v] of an.adj[u]) {
+        const w = Math.hypot(map.nodes[u].x - map.nodes[v].x, map.nodes[u].y - map.nodes[v].y);
+        if (d[u] + w < d[v]) d[v] = d[u] + w;
+      }
+    }
+    return d;
+  }
+
+  // 新規則（加工、套件、殭屍巡邏、油桶、安全區）對地圖的要求
+  function gameplayChecks(an) {
+    const out = [], add = (level, text) => out.push({ level, text });
+    const nodes = map.nodes, n = nodes.length;
+    const idx = t => nodes.map((nd, i) => nd.type === t ? i : -1).filter(i => i >= 0);
+    const exi = idx("extraction")[0], dEx = pathDist(an, exi);
+    const safe = i => nodes[i].type === "extraction" || nodes[i].type === "hospital";
+    const side = i => an.comp[i] === 0 ? "A" : "B";
+
+    if (n < 90) add("warn", `路口偏少（${n} 個），隨機地圖大約 120 個，建議 100–130`);
+    else if (n > 150) add("warn", `路口偏多（${n} 個），建議 100–130`);
+    else add("ok", `路口 ${n} 個`);
+
+    const fac = idx("factory"), gen = idx("generator"), hosp = idx("hospital");
+    if (fac.length && fac.length < 6) add("warn", `工廠 ${fac.length} 間，建議 6–8 間（加工要送到另一間工廠，套件要分散在好幾間）`);
+    if (hosp.length === 1) add("warn", "只有 1 間醫院，建議 2 間以上");
+    if (gen.length === 1) add("warn", "只有 1 台發電機：壞掉時全地圖的工廠都停工，建議河的兩邊各 1 台");
+    if (an.sides >= 2) {
+      for (const s of ["A", "B"]) {
+        const f = fac.filter(i => side(i) === s).length, g = gen.filter(i => side(i) === s).length;
+        if (!f) add("warn", `${s} 區沒有工廠：跨河的套件湊不起來`);
+        else if (!g && gen.length) add("warn", `${s} 區有工廠卻沒有發電機，只能靠另一區的發電機供電`);
+      }
+    } else if (fac.length) add("warn", "地圖沒有被河分成兩區：套件不會跨河");
+
+    if (fac.length) {
+      const fd = fac.map(i => dEx[i]).sort((a, b) => a - b), med = fd[Math.floor(fd.length / 2)];
+      if (med > 200) add("warn", `工廠離撤離點太遠（走路距離中位數 ${med.toFixed(0)}），這種地圖幾乎都打不贏，建議 60–120`);
+      else if (med > 150) add("warn", `工廠離撤離點偏遠（走路距離中位數 ${med.toFixed(0)}），地圖會偏難，建議 60–120`);
+      else add("ok", `工廠離撤離點的走路距離中位數 ${med.toFixed(0)}`);
+      const pairOk = fac.some(a => { const d = pathDist(an, a); return fac.some(b => b !== a && d[b] >= 6); });
+      if (fac.length >= 2 && !pairOk) add("warn", "工廠之間都太近（不到 6），不會出現送去加工的零件");
+    }
+
+    // 安全區以撤離點為中心縮小，撤離點在角落的話另一邊很快就在圈外
+    const xs = nodes.map(nd => nd.x), ys = nodes.map(nd => nd.y);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const half = Math.hypot(Math.max(...xs) - cx, Math.max(...ys) - cy) || 1;
+    const off = Math.hypot(nodes[exi].x - cx, nodes[exi].y - cy) / half;
+    if (off > 0.6) add("warn", "撤離點太靠邊：安全區往撤離點縮，另一邊的人很快就在圈外");
+
+    // 殭屍從感染點出生，繞到 25–60 格外的路口再回來，不經過撤離點和醫院
+    let seeds = nodes.map((nd, i) => nd.infected ? i : -1).filter(i => i >= 0);
+    if (!seeds.length) seeds = nodes.map((nd, i) => [Math.hypot(nd.x - nodes[exi].x, nd.y - nodes[exi].y), i]).sort((a, b) => b[0] - a[0]).slice(0, 2).map(p => p[1]);
+    const near = seeds.filter(i => dEx[i] < 25).length;
+    if (near) add("warn", `${near} 個感染點離撤離點太近（走路不到 25），殭屍一出生就在大家身邊`);
+    const cramped = seeds.filter(i => { const d = pathDist(an, i); return nodes.filter((nd, j) => nd.type === "road" && !safe(j) && d[j] >= 25 && d[j] <= 60).length < 3; }).length;
+    if (cramped) add("warn", `${cramped} 個感染點附近沒有足夠的路讓殭屍巡邏（25–60 格外要有路口），殭屍會原地來回`);
+
+    // 油桶放在離撤離點最遠距離的 15%–45% 之間的一般路口
+    const roads = nodes.map((nd, i) => i).filter(i => nodes[i].type === "road" && dEx[i] >= 6);
+    const dmax = Math.max(0, ...roads.map(i => dEx[i]));
+    const fuel = roads.filter(i => dEx[i] >= dmax * 0.15 && dEx[i] <= dmax * 0.45).length;
+    if (fuel < 4) add("warn", `適合放油桶的路口太少（${fuel} 個）：撤離點周圍中等距離要有一般路口`);
     return out;
   }
 
