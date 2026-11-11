@@ -12,23 +12,23 @@ PHASE_ENDS = [0.25, 0.5833, 0.8333, 1.0]
 PALETTE = ["#4DC2F7", "#FF7042", "#BA68C7", "#FFD64F", "#66BA6B", "#F06191", "#4FD1C4", "#FA9E21", "#9EA8FF", "#CCDB38"]
 
 DEFAULTS = dict(
-    mapCols=10, mapRows=8, bridges=2,
+    mapCols=12, mapRows=10, bridges=2,
     batchChance=0.6, batchMin=3, batchMax=5, batchBonusRatio=1.0, taskInterval=9.0, announceLead=60.0,
     seed=42, matchDuration=600.0, randomBots=0, greedyBots=0, botReactionTime=1.0,
-    planCooldown=15.0, maxPlanSteps=200, capacity=14, playerSpeed=3.0, loadSpeedPenalty=0.05, fuelWeight=4, weaponWeight=1, weaponShots=20, weaponStock=4, killReward=8, weaponRange=4.5, weaponInterval=1.2,
+    planCooldown=30.0, maxPlanSteps=200, capacity=20, playerSpeed=3.0, loadSpeedPenalty=0.035, fuelWeight=2, weaponWeight=1, weaponShots=20, weaponStock=4, killReward=8, weaponRange=4.5, weaponInterval=1.2,
     downedTime=15.0, survivalBonus=120, reviveBonus=60, respawnPenalty=15, respawnHp=70.0,
     cityRate=0.55, spreadAmount=0.15, spreadGrow=0.02,
 
     coop=True, coopCityRate=1.35, cityPerPlayer=0.02, cityPerPoint=0.03, classBonus=200, urgentFailCity=3.0, rescueFailCity=2.0,
     coopTaskPlayers=3.0,
 
-    escape=True, partsBase=0.0, partsPerPlayer=7.0, partsCrowding=0.15, difficulty=1.2, earliestDepart=480.0, departDelay=60.0, escapeBonus=100, earlyBonusPerSec=0.5,
+    escape=True, partsBase=0.0, partsPerPlayer=7.0, partsCrowding=0.15, difficulty=1.8, earliestDepart=480.0, departDelay=60.0, escapeBonus=100, earlyBonusPerSec=0.5,
     zoneStart=90.0, zoneEnd=540.0, zoneMinRadius=7.0, zoneDamage=3.0, zoneInfection=1.0,
 
     incidentInterval=30.0, roadblockInterval=45.0, roadblockTime=60.0, civilianZombies=1, civiliansPerPlayer=2.5, trappedCivilians=4, generatorWeight=0.04, generatorCooldown=90.0, speedBoost=1.2, speedBoostTime=60.0, guardDownTime=60.0,
     guardRange=5.0, guardFireInterval=1.0,
 
-    fuelPerPlayer=0.6, fuelSpare=4, fuelSparePerPlayer=0.3, fuelReward=80, boardTime=45.0, repairEarliest=0.62,
+    fuelPerPlayer=0.5, fuelSpare=4, fuelSparePerPlayer=0.3, fuelReward=80, boardTime=45.0, fuelNear=True,
 
     stunTime=40.0,
     herbGuardTime=30.0, herbCityDrop=20.0, gasFuelBonus=3, gasBlastRadius=5.0, gasBlastDamage=60.0,
@@ -36,10 +36,11 @@ DEFAULTS = dict(
     partWeightReward=12.0, rescueRewardMul=2.0, incidentRewardMul=1.0,
 
     partDecay=0.0,
-    urgentChance=0.3, urgentChancePerPhase=0.07, urgentBonusRatio=1.2,
-    comboWindow=5.0, comboStep=5, comboMax=8,
-    zombieSpeed=1.4, zombieSpeedPerPhase=0.2, zombieSight=5.5, zombieAttackRange=0.9,
-    zombieDamage=5.5, zombieInfection=2.5, zombieChaseMul=1.25, zombieCapBase=6.0, zombieCapGrowth=40.0, zombieSpawnMul=1.6,
+    urgentChance=0.0, urgentChancePerPhase=0.0, urgentBonusRatio=1.2,
+    partDueSlack=15.0, partDueTripMul=2.0, lateDecayPerMin=1.0, lateFloor=0.3, setChance=0.35, setBonusRatio=1.0, setRadius=40.0, setMin=3, setMax=5, setCrossRiver=True, procChance=0.35, procDelay=8.0, teamNeedBonus=0.5,
+    comboWindow=5.0, comboStep=0, comboMax=8,
+    zombieSpeed=1.6, zombieSpeedPerPhase=0.2, zombieSight=5.5, zombieLoseMul=1.5, dangerHorizon=60.0, zombieAttackRange=0.9,
+    zombieDamage=8.0, zombieInfection=2.5, zombieChaseMul=1.25, zombieCapBase=4.0, zombieCapGrowth=15.0, zombieSpawnMul=1.6,
     actionNoiseRadius=10.0, actionNoiseDuration=12.0, survivorNoiseRadius=8.0, screamRadius=12.0,
 )
 
@@ -482,6 +483,9 @@ class Task:
     def __init__(self, **kw):
         self.bonus, self.urgent, self.deadline, self.expires_at = 0, False, -1.0, -1.0
         self.carrier, self.completed_by, self.batch = -1, -1, -1
+        self.due_at, self.late_per_sec, self.min_reward = -1.0, 0.0, 0
+        self.set, self.set_bonus, self.set_size, self.done_visit = -1, 0, 0, -1
+        self.after, self.proc_delay = -1, 0.0
         self.__dict__.update(kw)
 
 class Batch:
@@ -510,6 +514,7 @@ class Player:
         self.parts = 0
         self.escaped = False
         self.combo, self.last_score_at = 0, -999.0
+        self.visit = 0
         self.protect_until = -1.0
         self.revived_at = -999.0
         self.ammo, self.kills, self.fire_cooldown = 0, 0, 0.0
@@ -518,7 +523,8 @@ class Zombie:
     def __init__(self, id, node, pos, from_player, rng):
         self.id, self.node, self.pos, self.from_player, self.rng = id, node, pos, from_player, rng
         self.next_node, self.progress, self.wait = -1, 0.0, 1.0
-        self.mode, self.target, self.chasing = "wander", -1, -1
+        self.mode, self.target, self.chasing = "patrol", -1, -1
+        self.route, self.ri = [], 0   # 巡邏路線（繞一圈的路口），ri 是下一個要去的位置
 
 class Noise:
     def __init__(self, id, node, pos, radius, until, source):
@@ -686,8 +692,6 @@ class Sim:
                 nd.weapons = c["weaponStock"]
         self.player_shots = []
         self.parts, self.parts_required, self.ready_at, self.depart_at = 0, 0, -1.0, -1.0
-        self.assembling = False
-        self.assemble_at = -1.0
         self.guard_kills = 0
         self.guard_cooldown, self.guard_shots = 0.0, []
         self.incidents: list[Incident] = []
@@ -843,27 +847,10 @@ class Sim:
         elif self.players and all(p.state == "eliminated" for p in self.players):
             self.end("所有傭兵皆已淘汰")
 
-    @property
-    def repair_gate(self):
-        return _f32(np.float32(self.cfg["matchDuration"]) * np.float32(self.cfg["repairEarliest"]))
-
     def _helicopter(self):
         c = self.cfg
-        gate = self.repair_gate
-        if self.assembling and self.ready_at < 0 and self.parts < self.parts_required:
-            self.assembling = False
-        if self.ready_at < 0 and self.parts >= self.parts_required and self.time < gate and not self.assembling:
-            self.assembling = True
-            if self.assemble_at < 0:
-                self.assemble_at = self.time
-            for p in self.players:
-                if p.state == "active":
-                    p.hp = 100.0
-                    p.infection = min(p.infection, 30.0)
-            before = len(self.zombies)
-            self.zombies = [z for z in self.zombies if not self.in_zone(z.pos)]
-            self.log("heli", f"零件已收集完成！守軍已清除圈內 {before - len(self.zombies)} 隻殭屍，技師正在組裝直升機，將於 {math.ceil(gate - self.time)} 秒後修好", self.extraction)
-        if self.ready_at < 0 and self.parts >= self.parts_required and self.time >= gate:
+        # 零件一湊齊就修好
+        if self.ready_at < 0 and self.parts >= self.parts_required:
             self.ready_at = self.time
             for p in self.players:
                 if p.state == "active":
@@ -907,21 +894,26 @@ class Sim:
         if not pool:
             pool = [nd for nd in m.nodes if nd.type == "road" and m.dist[self.extraction, nd.id] >= 6] or \
                    [nd for nd in m.nodes if nd.type == "road"]
-        edge = min(ring(nd) for nd in pool)
-        far = [nd for nd in pool if ring(nd) <= edge]
-        if len(far) < 4:
-            far = [nd for nd in pool if ring(nd) <= edge + 1]
-        reward = _round(c["fuelReward"] * (1 + 0.25 * self.phase))
+        if c["fuelNear"]:
+            # 油桶放在離撤離點不太遠的地方：最遠距離的 15%–45% 之間
+            dmax = max(float(m.dist[self.extraction, nd.id]) for nd in pool)
+            far = [nd for nd in pool if dmax * 0.15 <= float(m.dist[self.extraction, nd.id]) <= dmax * 0.45] or pool
+        else:
+            edge = min(ring(nd) for nd in pool)
+            far = [nd for nd in pool if ring(nd) <= edge]
+            if len(far) < 4:
+                far = [nd for nd in pool if ring(nd) <= edge + 1]
+        phase_mul = 1 + 0.25 * self.phase
         for _ in range(self.fuel_required + c["fuelSpare"] + int(n * c["fuelSparePerPlayer"])):
             node = far[self.rng.next(len(far))].id
+            reward = _round((c["fuelReward"] + float(m.dist[node, self.extraction]) * 0.6) * phase_mul)   # 越遠越值錢
             self.tasks.append(Task(id=self._id("task"), type="fuel", origin=node, dest=self.extraction, weight=int(c["fuelWeight"]),
                                    reward=reward, available_at=self.time, expires_at=-1.0, status="open"))
 
     @property
     def zone_radius(self):
         c = self.cfg
-        stop = self.assemble_at if self.assemble_at >= 0 else self.ready_at
-        t = self.time if stop < 0 else min(self.time, stop)
+        t = self.time if self.ready_at < 0 else min(self.time, self.ready_at)
         z0, z1 = c["zoneStart"] * self.dscale, c["zoneEnd"] * self.dscale
         if not c["escape"] or t <= z0:
             return self.zone_max
@@ -981,6 +973,9 @@ class Sim:
             if t.status == "open" and t.expires_at > 0 and self.time >= t.expires_at:
                 t.status = "expired"
                 if self.cfg["escape"]:
+                    for x in self.tasks:
+                        if x.after == t.id and x.status == "locked":
+                            x.status, x.expires_at = "expired", self.time
                     if t.type == "rescue":
                         for _ in range(self.cfg["civilianZombies"]):
                             self.spawn_zombie(t.origin, -1)
@@ -1039,7 +1034,7 @@ class Sim:
         if rescue:
             base = (18 + d * 0.5 + 20 * m.nodes[origin].infection) * c["rescueRewardMul"]
         elif c["escape"]:
-            base = 10 + d * 0.6 + weight * c["partWeightReward"]
+            base = (10 + d * 0.6 + weight * c["partWeightReward"]) * self.need_mul
         else:
             base = 8 + d * 0.5 + weight * 2
         base *= 1 + 0.25 * ph
@@ -1051,8 +1046,96 @@ class Sim:
             t.urgent = True
             t.bonus = _round(base * c["urgentBonusRatio"])
             t.deadline = available_at + (d + 15) / c["playerSpeed"] * 1.5 + 25
+        if t.type == "part":
+            self._set_due(t)
+            self.tasks.append(t)
+            if rng.next_double() < c["procChance"] and self._make_chain(t):
+                return t
+            if rng.next_double() < c["setChance"]:
+                self._make_set(t)
+            return t
         self.tasks.append(t)
         return t
+
+    @property
+    def need_mul(self):
+        b = self.cfg["teamNeedBonus"]
+        if self.parts_required <= 0:
+            return 1 + b
+        return 1 + b * min(1.0, max(0.0, 1 - self.parts / self.parts_required))
+
+    def _set_due(self, t):
+        c = self.cfg
+        d = float(self.map.dist[t.origin, t.dest])
+        t.due_at = t.available_at + c["partDueSlack"] + c["partDueTripMul"] * d / c["playerSpeed"]
+        t.late_per_sec = t.reward * c["lateDecayPerMin"] / 60
+        t.min_reward = _round(t.reward * c["lateFloor"])
+        t.expires_at = max(t.expires_at, t.due_at + 60)
+
+    def value_at(self, t, at):
+        # 送到時值多少分（不含套件獎金）
+        v = t.reward
+        if t.due_at >= 0 and at > t.due_at:
+            v = max(t.min_reward, _round(t.reward - t.late_per_sec * (at - t.due_at)))
+        if t.urgent and at <= t.deadline:
+            v += t.bonus
+        return v
+
+    def _make_chain(self, first):
+        # 加工：first 改成「工廠 → 另一間工廠」，再生出一件「加工廠 → 撤離點」，先鎖住，等 first 送到才開放
+        m, rng, c, ex = self.map, self.rng, self.cfg, self.extraction
+        shops = [n for n in m.nodes if n.type == "factory" and n.id != first.origin and 6 <= m.dist[first.origin, n.id] < INF
+                 and m.dist[n.id, ex] < INF]
+        if not shops:
+            return False
+        shop = shops[rng.next(len(shops))].id
+        d1, d2 = float(m.dist[first.origin, shop]), float(m.dist[shop, ex])
+        mul = self.need_mul * (1 + 0.25 * self.phase)
+        first.type, first.dest = "delivery", shop
+        first.reward = _round((10 + d1 * 0.6 + first.weight * c["partWeightReward"] * 0.5) * mul)
+        self._set_due(first)
+        nxt = Task(id=self._id("task"), type="part", origin=shop, dest=ex, weight=first.weight,
+                   reward=_round((10 + d2 * 0.6 + first.weight * c["partWeightReward"]) * mul),
+                   available_at=-1.0, expires_at=-1.0, status="locked")
+        nxt.after, nxt.proc_delay = first.id, c["procDelay"]
+        nxt.due_at = first.due_at + c["procDelay"] + c["partDueSlack"] + c["partDueTripMul"] * d2 / c["playerSpeed"]
+        nxt.late_per_sec = nxt.reward * c["lateDecayPerMin"] / 60
+        nxt.min_reward = _round(nxt.reward * c["lateFloor"])
+        self.tasks.append(nxt)
+        return True
+
+    def _make_set(self, first):
+        m, rng, c = self.map, self.rng, self.cfg
+        src = [n for n in m.nodes if n.type == "factory" and self.powered(n) and m.dist[first.origin, n.id] <= c["setRadius"]]
+        if not src:
+            return
+        members = [first]
+        for _ in range(c["setMin"] - 1 + rng.next(c["setMax"] - c["setMin"] + 1)):
+            origin = src[rng.next(len(src))].id
+            weight = 1 + rng.next(3)
+            d = float(m.dist[origin, self.extraction])
+            if d >= INF:
+                continue
+            t = Task(id=self._id("task"), type="part", origin=origin, dest=self.extraction, weight=weight,
+                     reward=_round((10 + d * 0.6 + weight * c["partWeightReward"]) * self.need_mul * (1 + 0.25 * self.phase)),
+                     available_at=first.available_at, expires_at=first.available_at + 90, status=first.status)
+            self._set_due(t)
+            self.tasks.append(t)
+            members.append(t)
+        if len(members) < 2:
+            return
+        side = m.side_a[first.origin]
+        if c["setCrossRiver"] and all(m.side_a[x.origin] == side for x in members):
+            other = [n for n in m.nodes if n.type == "factory" and m.side_a[n.id] != side and m.dist[n.id, self.extraction] < INF]
+            if other:
+                last = members[-1]
+                last.origin = other[rng.next(len(other))].id
+                d = float(m.dist[last.origin, self.extraction])
+                last.reward = _round((10 + d * 0.6 + last.weight * c["partWeightReward"]) * self.need_mul * (1 + 0.25 * self.phase))
+                self._set_due(last)
+        bonus = _round(sum(x.reward for x in members) * c["setBonusRatio"])
+        for x in members:
+            x.set, x.set_bonus, x.set_size = first.id, bonus, len(members)
 
     def _spawn_batch(self, origin, available_at):
         m, rng, c = self.map, self.rng, self.cfg
@@ -1117,8 +1200,36 @@ class Sim:
 
     def spawn_zombie(self, node, from_player):
         z = Zombie(self._id("zombie"), node, self.map.nodes[node].pos, from_player, DotNetRandom(self.rng.next()))
+        self._make_route(z)
         self.zombies.append(z)
         return z
+
+    def _make_route(self, z):
+        # 巡邏路線：出生點 → 兩個比較遠的路口 → 回出生點，繞一大圈；不經過撤離點和醫院，太短就重抽
+        m, start = self.map, z.node
+        roads = [n.id for n in m.nodes if n.type == "road"]
+
+        def pick(cands):
+            return cands[z.rng.next(len(cands))] if cands else -1
+
+        seq = None
+        for _ in range(8):
+            w1 = pick([n for n in roads if 25 <= m.dist[start, n] <= 60])
+            if w1 < 0:
+                break
+            w2 = pick([n for n in roads if n != start and 25 <= m.dist[w1, n] <= 60 and 20 <= m.dist[n, start] <= 70])
+            if w2 >= 0:
+                s = (m.path(start, w1) or []) + (m.path(w1, w2) or []) + (m.path(w2, start) or [])
+            else:
+                s = (m.path(start, w1) or []) + (m.path(w1, start) or [])
+            if not s or s[-1] != start or any(m.nodes[n].safe for n in s):
+                continue
+            if seq is None or len(s) > len(seq):   # 留最長的一條
+                seq = s
+            if len(s) >= 10:
+                break
+        z.route = [start] + seq[:-1] if seq else [start]
+        z.ri = 1 % len(z.route)
 
     def _events(self, dt):
         m = self.map
@@ -1326,9 +1437,11 @@ class Sim:
             if d >= INF:
                 continue
             weight = 3
-            base = (10 + d * 0.6 + weight * c["partWeightReward"]) * (1 + 0.25 * self.phase)
-            self.tasks.append(Task(id=self._id("task"), type="part", origin=f.id, dest=self.extraction, weight=weight,
-                                   reward=_round(base), available_at=self.time, expires_at=self.time + 90, status="open"))
+            base = (10 + d * 0.6 + weight * c["partWeightReward"]) * (1 + 0.25 * self.phase) * self.need_mul
+            t = Task(id=self._id("task"), type="part", origin=f.id, dest=self.extraction, weight=weight,
+                     reward=_round(base), available_at=self.time, expires_at=self.time + 90, status="open")
+            self._set_due(t)
+            self.tasks.append(t)
             k += 1
         return k
 
@@ -1373,6 +1486,9 @@ class Sim:
 
     def _combo_gain(self, p, base):
         c = self.cfg
+        if c["comboStep"] <= 0:
+            p.combo = 0
+            return base
         prev = p.combo
         gap = self.time - p.last_score_at
         if gap > c["comboWindow"]:
@@ -1702,6 +1818,7 @@ class Sim:
                 self._fail(p, s, f"move：道路 {p.node}-{s['node']} 已封鎖"); return
             p.next_node, p.progress = s["node"], 0.0
             p.plan_index += 1
+            p.visit += 1
             return
         if a == "goto":
             if not 0 <= s["node"] < len(m.nodes):
@@ -1712,6 +1829,7 @@ class Sim:
             if hop < 0:
                 self._fail(p, s, f"goto：無法抵達節點 {s['node']}"); return
             p.next_node, p.progress = hop, 0.0
+            p.visit += 1
             return
         if a in DROPS:
             self._do_drop(p, s)
@@ -1855,11 +1973,10 @@ class Sim:
             p.cargo.remove(t.id)
             if not (c["escape"] and p.node == self.extraction):
                 self._noise(p.node, c["actionNoiseRadius"], c["actionNoiseDuration"], "dropoff")
-            useless = c["escape"] and ((t.type == "part" and self.ready_at >= 0) or (t.type == "fuel" and self.fuel >= self.fuel_required))
-            gain = t.reward
+            useless = c["escape"] and ((t.type in ("part", "delivery") and self.ready_at >= 0) or (t.type == "fuel" and self.fuel >= self.fuel_required))
+            gain = self.value_at(t, self.time)
             on_time = not useless and t.urgent and self.time <= t.deadline
-            if on_time:
-                gain += t.bonus
+            late = not useless and t.due_at >= 0 and self.time > t.due_at
             if c["escape"] and t.type == "part" and c["partDecay"] > 0:
                 gain = _round(gain * c["partDecay"] / (c["partDecay"] + p.parts))
             if useless:
@@ -1868,6 +1985,12 @@ class Sim:
                 gain = self._combo_gain(p, gain)
             p.score += gain
             t.status, t.carrier, t.completed_by, t.expires_at = "done", -1, p.id, self.time
+            t.done_visit = p.visit
+            for x in self.tasks:
+                if x.after == t.id and x.status == "locked":
+                    x.status, x.available_at = "announced", self.time + x.proc_delay
+                    x.expires_at = max(x.due_at + 60, x.available_at + 90)
+                    self.log("process", f"零件 #{t.id} 送到加工廠，{x.proc_delay:.0f} 秒後可以把 #{x.id} 送去撤離點", p.node)
             if c["coop"] and not c["escape"]:
                 self._reduce_city(p, gain)
             if t.type == "part":
@@ -1885,7 +2008,12 @@ class Sim:
                 p.delivered += 1
             kind = {"rescue": "救援", "part": "零件", "fuel": "油桶"}.get(t.type, "配送")
             combo = f"（連續得分 {p.combo + 1} 次）" if c["escape"] and p.combo > 0 else ""
-            self.log("done", f"{p.name} 完成{kind} #{t.id} +{gain}{'（已經不需要了）' if useless else ''}{'（限時獎勵）' if on_time else ''}{combo}")
+            self.log("done", f"{p.name} 完成{kind} #{t.id} +{gain}{'（已經不需要了）' if useless else ''}{'（限時獎勵）' if on_time else ''}{'（晚到）' if late else ''}{combo}")
+            if not useless and t.set >= 0:
+                got = sum(1 for x in self.tasks if x.set == t.set and x.status == "done" and x.completed_by == p.id and x.done_visit == p.visit)
+                if got == t.set_size:
+                    p.score += t.set_bonus
+                    self.log("set", f"{p.name} 一趟交齊整套零件（{got} 件），套件獎金 +{t.set_bonus}", p.node)
             b = self.batch_of(t)
             if b is not None and c["coop"]:
                 b.delivered += 1
@@ -2026,6 +2154,13 @@ class Sim:
             if self._prey(z) is None:
                 return
         self._decide(z)
+        if z.mode == "patrol":
+            if len(z.route) > 1:
+                if z.route[z.ri] == z.node:
+                    z.ri = (z.ri + 1) % len(z.route)
+                z.next_node, z.progress = z.route[z.ri], 0.0
+                z.ri = (z.ri + 1) % len(z.route)
+            return
         if z.target >= 0 and z.target != z.node:
             hop = int(self.map.next[z.node, z.target])
             if hop >= 0:
@@ -2034,22 +2169,20 @@ class Sim:
                 z.target = -1
 
     def _decide(self, z):
+        # 看到人就追；追的人跑出視線 × zombieLoseMul 就放棄，走回巡邏路線上最近的路口，再接著巡邏
         m = self.map
-        prey = self._prey(z)
+        sight = self.cfg["zombieSight"] * (self.cfg["zombieLoseMul"] if z.mode == "chase" else 1.0)
+        prey = self._prey(z, sight)
         if prey is not None:
             z.mode, z.chasing = "chase", prey.id
             z.target = prey.next_node if prey.next_node >= 0 else prey.node
             return
         z.chasing = -1
-        near = [n for n in self.noises if _vd(z.pos, n.pos) <= n.radius]
-        if near:
-            z.mode, z.target = "attracted", min(near, key=lambda n: _vd(z.pos, n.pos)).node
-            return
-        if z.mode != "wander" or z.target < 0 or z.target == z.node:
-            z.mode = "wander"
-            cand = [n for n in m.nodes if not n.safe and 6 <= m.dist[z.node, n.id] <= 18] or \
-                   [n for n in m.nodes if not n.safe and n.id != z.node]
-            z.target = cand[z.rng.next(len(cand))].id if cand else -1
+        if z.mode == "chase":
+            i = min(range(len(z.route)), key=lambda k: (m.dist[z.node, z.route[k]], k))
+            z.mode, z.ri, z.target = "return", i, z.route[i]
+        if z.mode == "return" and (z.target < 0 or z.node == z.target):
+            z.mode, z.target = "patrol", -1
 
     def _targets(self, p):
         out = [s["task"] for s in p.plan[p.plan_index:] if s["action"] == "pickup"]
@@ -2063,17 +2196,113 @@ class Sim:
             out.append(p.pending["task"])
         return out
 
-    def zombie_path(self, z, max_len=10):
-        path, frm = [], z.node
+    def _upcoming(self, z):
+        # 殭屍接下來會經過的路口：巡邏、走回巡邏路線時是確定的；追人時只到目前的目標
+        frm = z.next_node if z.next_node >= 0 else z.node
         if z.next_node >= 0:
-            path.append(z.next_node)
-            frm = z.next_node
-        if z.target >= 0 and z.target != frm:
-            path += self.map.path(frm, z.target) or []
-        return path[:max_len]
+            yield z.next_node
+        if z.mode == "chase":
+            if z.target >= 0 and z.target != frm:
+                yield from self.map.path(frm, z.target) or []
+            return
+        ri = z.ri
+        if z.mode == "return":
+            yield from self.map.path(frm, z.target) or []
+            frm = z.target
+        if len(z.route) < 2:
+            return
+        while True:
+            if z.route[ri] == frm:
+                ri = (ri + 1) % len(z.route)
+            frm = z.route[ri]
+            yield frm
+            ri = (ri + 1) % len(z.route)
 
-    def _prey(self, z):
-        prey, best = None, self.cfg["zombieSight"]
+    def zombie_path(self, z, max_len=10):
+        out = []
+        for n in self._upcoming(z):
+            out.append(n)
+            if len(out) >= max_len:
+                break
+        return out
+
+    def danger(self):
+        # 每個路口未來 dangerHorizon 秒內「有殭屍在視線範圍內」的時段（絕對時間），每個時間點只算一次
+        if getattr(self, "_danger_at", None) == self.time:
+            return self._danger_cache
+        m, c = self.map, self.cfg
+        R, now = c["zombieSight"], self.time
+        end = now + c["dangerHorizon"]
+        t0 = max(now, self.zombie_stun_until)
+        win = {}
+
+        def mark(n, a, b):
+            # 殭屍每到一個路口會慢一點點，所以時段往前多抓 0.3 秒、往後多抓 1.5 秒
+            a, b = a - 0.3, b + 1.5
+            if b > now and a < end:
+                win.setdefault(n, []).append((max(a, now), min(b, end)))
+
+        def near_point(p, a, b):
+            for nd in m.nodes:
+                if not nd.safe and _vd(p, nd.pos) <= R:
+                    mark(nd.id, a, b)
+
+        def segment(p, q, a, b):
+            dx, dy = q[0] - p[0], q[1] - p[1]
+            aa = dx * dx + dy * dy
+            if aa < 1e-9:
+                near_point(p, a, b)
+                return
+            for nd in m.nodes:
+                if nd.safe:
+                    continue
+                fx, fy = p[0] - nd.pos[0], p[1] - nd.pos[1]
+                bb = 2 * (dx * fx + dy * fy)
+                cc = fx * fx + fy * fy - R * R
+                disc = bb * bb - 4 * aa * cc
+                if disc < 0:
+                    continue
+                s = math.sqrt(disc)
+                u1, u2 = max(0.0, (-bb - s) / (2 * aa)), min(1.0, (-bb + s) / (2 * aa))
+                if u1 <= u2:
+                    mark(nd.id, a + (b - a) * u1, a + (b - a) * u2)
+
+        speed = max(0.1, self.zombie_speed)
+        for z in self.zombies:
+            if z.mode == "chase":
+                near_point(z.pos, t0, t0 + 5)
+                continue
+            t, at, cur = t0, z.pos, z.node
+            if z.next_node < 0 and z.wait > 0:
+                near_point(at, t, t + z.wait)
+                t += z.wait
+            first = z.next_node >= 0
+            for n in self._upcoming(z):
+                e = m.find_edge(cur, n)
+                length = e.length if e else _vd(at, m.nodes[n].pos)
+                if first:
+                    length *= 1 - z.progress
+                    first = False
+                dt_ = length / speed
+                segment(at, m.nodes[n].pos, t, t + dt_)
+                t, at, cur = t + dt_, m.nodes[n].pos, n
+                if t >= end:
+                    break
+        out = {}
+        for n, ws in win.items():
+            ws.sort()
+            merged = [list(ws[0])]
+            for a, b in ws[1:]:
+                if a <= merged[-1][1]:
+                    merged[-1][1] = max(merged[-1][1], b)
+                else:
+                    merged.append([a, b])
+            out[n] = [[round(a, 1), round(b, 1)] for a, b in merged]
+        self._danger_at, self._danger_cache = self.time, out
+        return out
+
+    def _prey(self, z, sight=None):
+        prey, best = None, self.cfg["zombieSight"] if sight is None else sight
         for p in self.players:
             if p.state != "active" or (p.next_node < 0 and self.is_safe(p.node)):
                 continue
@@ -2205,11 +2434,11 @@ class Sim:
         you = {}
         if viewer is not None:
             you = unit(viewer)
-        live = ("announced", "open", "carried")
+        live = ("announced", "open", "carried", "locked")
         return dict(
             status=self.status, phase=self.phase, coop=c["coop"], class_won=self.class_won,
             escape=dict(enabled=c["escape"], extraction=self.extraction, parts=self.parts, parts_required=self.parts_required,
-                        ready_at=self.ready_at, repair_at=self.repair_gate, depart_at=self.depart_at, zone_x=m.nodes[self.extraction].pos[0],
+                        ready_at=self.ready_at, depart_at=self.depart_at, zone_x=m.nodes[self.extraction].pos[0],
                         zone_y=m.nodes[self.extraction].pos[1], zone_radius=self.zone_radius,
                         zone_damage=c["zoneDamage"], escape_bonus=c["escapeBonus"], evacuated=self.evacuated,
                         speed_boost_until=self.speed_boost_until, guard_down_until=self.guard_down_until,
@@ -2236,7 +2465,9 @@ class Sim:
                         blocked_until=e.blocked_until if e.blocked else 0) for e in m.edges],
             tasks=[dict(id=t.id, type=t.type, origin=t.origin, dest=t.dest, weight=t.weight, reward=t.reward, bonus=t.bonus,
                         urgent=t.urgent, deadline=t.deadline, expires_at=t.expires_at, status=t.status, carrier=t.carrier,
-                        batch=t.batch, available_at=t.available_at) for t in self.tasks if t.status in live],
+                        batch=t.batch, available_at=t.available_at, due_at=t.due_at, late_per_sec=t.late_per_sec,
+                        min_reward=t.min_reward, set=t.set, set_bonus=t.set_bonus, set_size=t.set_size,
+                        after=t.after, proc_delay=t.proc_delay) for t in self.tasks if t.status in live],
             batches=[dict(id=b.id, origin=b.origin, owner=b.owner, bonus=b.bonus, delivered=b.delivered, deadline=b.deadline,
                           paid=b.paid, failed=b.failed, tasks=list(b.tasks)) for b in self.batches.values()
                      if any(self.task_by_id(i) and self.task_by_id(i).status in live for i in b.tasks)],
@@ -2247,10 +2478,12 @@ class Sim:
                           fixing=self._fixing(p), fixed=p.fixed, fuel=p.fuel, combo=self.combo_of(p), ammo=p.ammo, kills=p.kills)
                      for p in self.players],
             zombies=[dict(id=z.id, node=z.node, next_node=z.next_node, x=z.pos[0], y=z.pos[1], from_player=z.from_player,
-                          progress=z.progress, mode=z.mode, target=z.target, chasing=z.chasing, path=self.zombie_path(z))
+                          progress=z.progress, mode=z.mode, target=z.target, chasing=z.chasing, path=self.zombie_path(z),
+                          route=list(z.route), route_index=z.ri)
                      for z in self.zombies],
             noises=[dict(id=n.id, node=n.node, x=n.pos[0], y=n.pos[1], radius=n.radius, until=n.until, source=n.source) for n in self.noises],
             zombie_speed=self.zombie_speed,
+            danger=[dict(node=n, windows=[x for w in ws for x in w]) for n, ws in sorted(self.danger().items())],
             events=[dict(time=e["time"], type=e["type"], text=e["text"]) for e in self.events[-20:]],
             you=you,
         )

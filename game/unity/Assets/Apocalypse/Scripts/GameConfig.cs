@@ -15,8 +15,8 @@ namespace Apocalypse
         public string publicUrl = "";
         public string mapFile = "";
 
-        public int mapCols = 10;
-        public int mapRows = 8;
+        public int mapCols = 12;
+        public int mapRows = 10;
         public int bridges = 2;
 
         public float batchChance = 0.6f;
@@ -53,10 +53,9 @@ namespace Apocalypse
         public float guardDownTime = 60f;
         public float guardRange = 5f, guardFireInterval = 1f;
 
-        public float fuelPerPlayer = 0.6f, fuelSparePerPlayer = 0.3f;
+        public float fuelPerPlayer = 0.5f, fuelSparePerPlayer = 0.3f;
         public int fuelSpare = 4, fuelReward = 80;
         public float boardTime = 45f;
-        public float repairEarliest = 0.62f;
 
         public float stunTime = 40f;
         public float herbGuardTime = 30f, herbCityDrop = 20f;
@@ -65,10 +64,20 @@ namespace Apocalypse
 
         public float partWeightReward = 12f, rescueRewardMul = 2f, incidentRewardMul = 1f;
         public float partDecay = 0f;
-        public float urgentChance = 0.3f, urgentChancePerPhase = 0.07f, urgentBonusRatio = 1.2f;
+        public float urgentChance = 0f, urgentChancePerPhase = 0f, urgentBonusRatio = 1.2f;
+        // 零件的期限：出現後 partDueSlack 秒 + 來回路程（距離 × 2 ÷ 速度）；過期每分鐘少 lateDecayPerMin 份 reward，最低剩 lateFloor
+        public float partDueSlack = 15f, partDueTripMul = 2f, lateDecayPerMin = 1f, lateFloor = 0.3f;
+        // 套件：零件有 setChance 的機率和另外 1–2 件組成一套；同一趟一起交多拿整套分數的 setBonusRatio
+        public float setChance = 0.35f, setBonusRatio = 1f, setRadius = 40f;   // 同一套的零件來自第一件 setRadius 格內的工廠
+        public int setMin = 3, setMax = 5;
+        public bool setCrossRiver = true;     // 套件至少有一件在河的另一邊
+        // 加工：procChance 的零件要先送到另一間工廠加工，送到後 procDelay 秒才能撿去撤離點
+        public float procChance = 0.35f, procDelay = 8f;
+        // 全班還缺越多零件，新出現的零件越值錢：最多多 teamNeedBonus
+        public float teamNeedBonus = 0.5f;
         public float comboWindow = 5f;
-        public int comboStep = 5, comboMax = 8;
-        public float difficulty = 1.2f;
+        public int comboStep = 0, comboMax = 8;
+        public float difficulty = 1.8f;
         public float earliestDepart = 480f;
         public float departDelay = 60f;
         public int escapeBonus = 100;
@@ -90,12 +99,12 @@ namespace Apocalypse
         public float autoLoopDelay = 0f;
         public int[] practiceSeeds = new int[0];
 
-        public float planCooldown = 15f;
+        public float planCooldown = 30f;
         public int maxPlanSteps = 200;
-        public int capacity = 14;
+        public int capacity = 20;
         public float playerSpeed = 3f;
-        public float loadSpeedPenalty = 0.05f;
-        public int fuelWeight = 4;
+        public float loadSpeedPenalty = 0.035f;
+        public int fuelWeight = 2;
         public int weaponWeight = 1, weaponShots = 20, weaponStock = 4, killReward = 8;
         public float weaponRange = 4.5f, weaponInterval = 1.2f;
         public float downedTime = 15f;
@@ -104,14 +113,17 @@ namespace Apocalypse
         public int survivalBonus = 120;
         public int reviveBonus = 60;
 
-        public float zombieSpeed = 1.4f;
+        public float zombieSpeed = 1.6f;
         public float zombieSpeedPerPhase = 0.2f;
+        public bool fuelNear = true;          // 油桶放在安全區中段，不放在地圖邊緣
         public float zombieSight = 5.5f;
+        public float zombieLoseMul = 1.5f;     // 追的人跑出視線 × 這個倍數就放棄，回巡邏路線
+        public float dangerHorizon = 60f;     // st.danger 預測未來幾秒
         public float zombieAttackRange = 0.9f;
-        public float zombieDamage = 5.5f;
+        public float zombieDamage = 8f;
         public float zombieInfection = 2.5f;
         public float zombieChaseMul = 1.25f;
-        public float zombieCapBase = 6f, zombieCapGrowth = 40f, zombieSpawnMul = 1.6f;
+        public float zombieCapBase = 4f, zombieCapGrowth = 15f, zombieSpawnMul = 1.6f;
 
         public float actionNoiseRadius = 10f;
         public float actionNoiseDuration = 12f;

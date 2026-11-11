@@ -6,7 +6,7 @@ namespace Apocalypse
 {
     public enum NodeType { Road, Shelter, Hospital, Supply, Factory, Generator, Armory }
     public enum TaskType { Delivery, Rescue, Part, Fuel }
-    public enum TaskStatus { Announced, Open, Carried, Done, Expired }
+    public enum TaskStatus { Announced, Open, Carried, Done, Expired, Locked }
     public enum PlayerState { Active, Downed, Eliminated }
     public enum MatchStatus { Lobby, Running, Ended }
 
@@ -51,6 +51,15 @@ namespace Apocalypse
         public int carrier = -1;
         public int completedBy = -1;
         public int batch = -1;
+        // 零件：過了 dueAt 每秒少 latePerSec 分，最低 minReward
+        public float dueAt = -1f, latePerSec;
+        public int minReward;
+        // 套件：同一個 set 的零件由同一人在同一趟一起交，再加 setBonus
+        public int set = -1, setBonus, setSize;
+        public int doneVisit = -1;
+        // 加工：after 是前一段（要先送去加工的那件），送到後 procDelay 秒這件才開放
+        public int after = -1;
+        public float procDelay;
     }
 
     public class Batch
@@ -116,6 +125,7 @@ namespace Apocalypse
         public int fixedCount;
         public int fuel;
         public int combo;
+        public int visit;   // 每離開一個路口加 1，用來判斷「同一趟」
         public float lastScoreAt = -999f;
         public float protectUntil = -1f;
         public float revivedAt = -999f;
@@ -133,7 +143,7 @@ namespace Apocalypse
         public int rank;
     }
 
-    public enum ZombieMode { Wander, Attracted, Chase }
+    public enum ZombieMode { Patrol, Chase, Return }
 
     public class Incident
     {
@@ -154,6 +164,8 @@ namespace Apocalypse
         public int chasing = -1;
         public int fromPlayer = -1;
         public System.Random rng;
+        public List<int> route = new List<int>();   // 巡邏路線（繞一圈的路口）
+        public int ri;                              // 下一個要去的是 route[ri]
     }
 
     public class Noise

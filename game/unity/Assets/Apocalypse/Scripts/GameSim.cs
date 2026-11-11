@@ -140,9 +140,6 @@ namespace Apocalypse
             }
         }
 
-        public float RepairGate => cfg.matchDuration * cfg.repairEarliest;
-        bool assembling;
-        float assembleAt = -1f;
 
         public float TimeLeft => Mathf.Max(0f, cfg.matchDuration - (ClockStopped ? departAt - cfg.boardTime : time));
         public bool ClockStopped => cfg.escape && departAt >= 0;
@@ -208,7 +205,7 @@ namespace Apocalypse
             foreach (var n in map.nodes) if (n.type == NodeType.Armory) n.weapons = cfg.weaponStock;
             var ex = map.nodes[extraction].pos;
             zoneMax = map.nodes.Max(n => Vector2.Distance(n.pos, ex)) + 1f;
-            parts = partsRequired = 0; readyAt = departAt = -1f; zoneClearedAt = -1f; assembling = false; assembleAt = -1f; guardKills = 0; guardCooldown = 0f; guardShots.Clear(); playerShots.Clear();
+            parts = partsRequired = 0; readyAt = departAt = -1f; zoneClearedAt = -1f; guardKills = 0; guardCooldown = 0f; guardShots.Clear(); playerShots.Clear();
             incidents.Clear(); evacuated = 0; speedBoostUntil = guardDownUntil = -1f; heliBoost = false;
             nextIncidentId = 0; incidentTimer = 25f; roadblockTimer = 40f; roadblockIndex = 0; lastPhase = 0; lastGeneratorBreak = -999f;
             zombieStunUntil = -1f; infectionGuardUntil = -1f; medevacTimer = 5f; medevacNext = 0f; medevacRolls = 0;
@@ -372,20 +369,8 @@ namespace Apocalypse
 
         void UpdateHelicopter()
         {
-            // 組裝中遇到「直升機故障」零件需求變高：回到收集零件，再湊齊時重新觸發（安全區維持第一次湊齊時停住的大小）
-            if (assembling && readyAt < 0 && parts < partsRequired) assembling = false;
-            if (readyAt < 0 && parts >= partsRequired && time < RepairGate && !assembling)
-            {
-                assembling = true;
-                if (assembleAt < 0) assembleAt = time;
-                foreach (var p in players)
-                    if (p.state == PlayerState.Active) { p.hp = 100f; p.infection = Mathf.Min(p.infection, 30f); }
-                int before = zombies.Count;
-                zombies.RemoveAll(z => InZone(z.pos));
-                zoneClearedAt = time;
-                Log("heli", $"零件已收集完成！守軍已清除圈內 {before - zombies.Count} 隻殭屍，技師正在組裝直升機，將於 {Mathf.CeilToInt(RepairGate - time)} 秒後修好", extraction);
-            }
-            if (readyAt < 0 && parts >= partsRequired && time >= RepairGate)
+            // 零件一湊齊就修好
+            if (readyAt < 0 && parts >= partsRequired)
             {
                 readyAt = time;
                 foreach (var p in players)
@@ -420,13 +405,25 @@ namespace Apocalypse
             var pool = map.nodes.Where(nd => nd.type == NodeType.Road && map.dist[extraction, nd.id] >= 6f && InZone(nd.pos)).ToList();
             if (pool.Count == 0) pool = map.nodes.Where(nd => nd.type == NodeType.Road && map.dist[extraction, nd.id] >= 6f).ToList();
             if (pool.Count == 0) pool = map.nodes.Where(nd => nd.type == NodeType.Road).ToList();
-            int edge = pool.Min(Ring);
-            var far = pool.Where(nd => Ring(nd) <= edge).ToList();
-            if (far.Count < 4) far = pool.Where(nd => Ring(nd) <= edge + 1).ToList();
-            int reward = Mathf.RoundToInt(cfg.fuelReward * (1f + 0.25f * Phase));
+            List<Node> far;
+            if (cfg.fuelNear)
+            {
+                // 油桶放在離撤離點不太遠的地方：最遠距離的 15%–45% 之間
+                float dmax = pool.Max(nd => map.dist[extraction, nd.id]);
+                far = pool.Where(nd => map.dist[extraction, nd.id] >= dmax * 0.15f && map.dist[extraction, nd.id] <= dmax * 0.45f).ToList();
+                if (far.Count == 0) far = pool;
+            }
+            else
+            {
+                int edge = pool.Min(Ring);
+                far = pool.Where(nd => Ring(nd) <= edge).ToList();
+                if (far.Count < 4) far = pool.Where(nd => Ring(nd) <= edge + 1).ToList();
+            }
+            float phaseMul = 1f + 0.25f * Phase;
             for (int i = 0; i < fuelRequired + cfg.fuelSpare + (int)(n * cfg.fuelSparePerPlayer); i++)
             {
                 int node = far[rng.Next(far.Count)].id;
+                int reward = Mathf.RoundToInt((cfg.fuelReward + map.dist[node, extraction] * 0.6f) * phaseMul);   // 越遠越值錢
                 tasks.Add(new GameTask
                 {
                     id = nextTaskId++, type = TaskType.Fuel, origin = node, dest = extraction, weight = cfg.fuelWeight, reward = reward,
@@ -439,8 +436,7 @@ namespace Apocalypse
         {
             get
             {
-                float stop = assembleAt >= 0 ? assembleAt : readyAt;
-                float t = stop < 0 ? time : Mathf.Min(time, stop);
+                float t = readyAt < 0 ? time : Mathf.Min(time, readyAt);
                 float z0 = cfg.zoneStart * DScale, z1 = cfg.zoneEnd * DScale;
                 if (!cfg.escape || t <= z0) return zoneMax;
                 float f = Mathf.Min(1f, (t - z0) / Mathf.Max(1f, z1 - z0));
@@ -635,12 +631,14 @@ namespace Apocalypse
                 float d = map.dist[f.id, extraction];
                 if (d >= CityMap.Inf) continue;
                 const int weight = 3;
-                float baseReward = (10f + d * 0.6f + weight * cfg.partWeightReward) * (1f + 0.25f * Phase);
-                tasks.Add(new GameTask
+                float baseReward = (10f + d * 0.6f + weight * cfg.partWeightReward) * (1f + 0.25f * Phase) * NeedMul;
+                var pt = new GameTask
                 {
                     id = nextTaskId++, type = TaskType.Part, origin = f.id, dest = extraction, weight = weight,
                     reward = Mathf.RoundToInt(baseReward), availableAt = time, expiresAt = time + 90f, status = TaskStatus.Open,
-                });
+                };
+                SetDue(pt);
+                tasks.Add(pt);
                 k++;
             }
             return k;
@@ -693,6 +691,7 @@ namespace Apocalypse
 
         int ComboGain(Player p, int gain)
         {
+            if (cfg.comboStep <= 0) { p.combo = 0; return gain; }
             int prev = p.combo;
             float gap = time - p.lastScoreAt;
             if (gap > cfg.comboWindow) p.combo = 0;
@@ -965,6 +964,7 @@ namespace Apocalypse
                     t.status = TaskStatus.Expired;
                     if (cfg.escape)
                     {
+                        foreach (var x in tasks) if (x.after == t.id && x.status == TaskStatus.Locked) { x.status = TaskStatus.Expired; x.expiresAt = time; }
                         if (t.type == TaskType.Rescue)
                         {
                             for (int i = 0; i < cfg.civilianZombies; i++) SpawnZombie(t.origin, -1);
@@ -1036,7 +1036,7 @@ namespace Apocalypse
 
             float baseReward = rescue
                 ? (18f + d * 0.5f + 20f * map.nodes[origin].infection) * cfg.rescueRewardMul
-                : cfg.escape ? 10f + d * 0.6f + weight * cfg.partWeightReward
+                : cfg.escape ? (10f + d * 0.6f + weight * cfg.partWeightReward) * NeedMul
                 : 8f + d * 0.5f + weight * 2f;
             baseReward *= 1f + 0.25f * Phase;
 
@@ -1058,8 +1058,100 @@ namespace Apocalypse
                 string when = lead > 0 ? $"{lead:0} 秒後開放，" : "";
                 Log("urgent", $"緊急委託 #{t.id}：{(rescue ? "救援" : cfg.escape ? "零件" : "配送")} {origin}→{dest}，{when}期限 {Clock(t.deadline)}，獎金 +{t.bonus}");
             }
+            if (t.type == TaskType.Part)
+            {
+                SetDue(t);
+                tasks.Add(t);
+                if (rng.NextDouble() < cfg.procChance && MakeChain(t)) return t;
+                if (rng.NextDouble() < cfg.setChance) MakeSet(t);
+                return t;
+            }
             tasks.Add(t);
             return t;
+        }
+
+        float NeedMul => partsRequired > 0 ? 1f + cfg.teamNeedBonus * Mathf.Clamp01(1f - (float)parts / partsRequired) : 1f + cfg.teamNeedBonus;
+
+        void SetDue(GameTask t)
+        {
+            float d = map.dist[t.origin, t.dest];
+            t.dueAt = t.availableAt + cfg.partDueSlack + cfg.partDueTripMul * d / cfg.playerSpeed;
+            t.latePerSec = t.reward * cfg.lateDecayPerMin / 60f;
+            t.minReward = Mathf.RoundToInt(t.reward * cfg.lateFloor);
+            t.expiresAt = Mathf.Max(t.expiresAt, t.dueAt + 60f);
+        }
+
+        // 送到時值多少分（不含套件獎金）
+        public int ValueAt(GameTask t, float at)
+        {
+            int v = t.reward;
+            if (t.dueAt >= 0f && at > t.dueAt) v = Mathf.Max(t.minReward, Mathf.RoundToInt(t.reward - t.latePerSec * (at - t.dueAt)));
+            if (t.urgent && at <= t.deadline) v += t.bonus;
+            return v;
+        }
+
+        // 加工：first 改成「工廠 → 另一間工廠」，再生出一件「加工廠 → 撤離點」，先鎖住，等 first 送到才開放
+        bool MakeChain(GameTask first)
+        {
+            var shops = map.nodes.Where(n => n.type == NodeType.Factory && n.id != first.origin && map.dist[first.origin, n.id] >= 6f
+                                             && map.dist[first.origin, n.id] < CityMap.Inf && map.dist[n.id, extraction] < CityMap.Inf).ToList();
+            if (shops.Count == 0) return false;
+            int shop = shops[rng.Next(shops.Count)].id;
+            float d1 = map.dist[first.origin, shop], d2 = map.dist[shop, extraction], mul = NeedMul * (1f + 0.25f * Phase);
+            first.type = TaskType.Delivery; first.dest = shop;
+            first.reward = Mathf.RoundToInt((10f + d1 * 0.6f + first.weight * cfg.partWeightReward * 0.5f) * mul);
+            SetDue(first);
+            var next = new GameTask
+            {
+                id = nextTaskId++, type = TaskType.Part, origin = shop, dest = extraction, weight = first.weight,
+                reward = Mathf.RoundToInt((10f + d2 * 0.6f + first.weight * cfg.partWeightReward) * mul),
+                availableAt = -1f, expiresAt = -1f, status = TaskStatus.Locked, after = first.id, procDelay = cfg.procDelay,
+            };
+            next.dueAt = first.dueAt + cfg.procDelay + cfg.partDueSlack + cfg.partDueTripMul * d2 / cfg.playerSpeed;
+            next.latePerSec = next.reward * cfg.lateDecayPerMin / 60f;
+            next.minReward = Mathf.RoundToInt(next.reward * cfg.lateFloor);
+            tasks.Add(next);
+            return true;
+        }
+
+        // 再生出 setMin−1 到 setMax−1 件零件，和 first 組成一套；setCrossRiver 時至少一件在河的另一邊
+        void MakeSet(GameTask first)
+        {
+            var src = map.nodes.Where(n => n.type == NodeType.Factory && Powered(n) && map.dist[first.origin, n.id] <= cfg.setRadius).ToList();
+            if (src.Count == 0) return;
+            var members = new List<GameTask> { first };
+            int extra = cfg.setMin - 1 + rng.Next(cfg.setMax - cfg.setMin + 1);
+            for (int i = 0; i < extra; i++)
+            {
+                int origin = src[rng.Next(src.Count)].id;
+                int weight = 1 + rng.Next(3);
+                float d = map.dist[origin, extraction];
+                if (d >= CityMap.Inf) continue;
+                var t = new GameTask
+                {
+                    id = nextTaskId++, type = TaskType.Part, origin = origin, dest = extraction, weight = weight,
+                    reward = Mathf.RoundToInt((10f + d * 0.6f + weight * cfg.partWeightReward) * NeedMul * (1f + 0.25f * Phase)),
+                    availableAt = first.availableAt, expiresAt = first.availableAt + 90f, status = first.status,
+                };
+                SetDue(t);
+                tasks.Add(t);
+                members.Add(t);
+            }
+            if (members.Count < 2) return;
+            if (cfg.setCrossRiver && members.All(m => map.West(m.origin) == map.West(first.origin)))
+            {
+                var other = map.nodes.Where(n => n.type == NodeType.Factory && map.West(n.id) != map.West(first.origin) && map.dist[n.id, extraction] < CityMap.Inf).ToList();
+                if (other.Count > 0)
+                {
+                    var last = members[members.Count - 1];
+                    last.origin = other[rng.Next(other.Count)].id;
+                    float d = map.dist[last.origin, extraction];
+                    last.reward = Mathf.RoundToInt((10f + d * 0.6f + last.weight * cfg.partWeightReward) * NeedMul * (1f + 0.25f * Phase));
+                    SetDue(last);
+                }
+            }
+            int bonus = Mathf.RoundToInt(members.Sum(m => m.reward) * cfg.setBonusRatio);
+            foreach (var m in members) { m.set = first.id; m.setBonus = bonus; m.setSize = members.Count; }
         }
 
         GameTask SpawnBatch(int origin, float availableAt)
@@ -1153,8 +1245,33 @@ namespace Apocalypse
         Zombie SpawnZombie(int node, int fromPlayer)
         {
             var z = new Zombie { id = nextZombieId++, node = node, pos = map.nodes[node].pos, fromPlayer = fromPlayer, wait = 1f, rng = new System.Random(rng.Next()) };
+            MakeRoute(z);
             zombies.Add(z);
             return z;
+        }
+
+        // 巡邏路線：出生點 → 兩個比較遠的路口 → 回出生點，繞一大圈；不經過撤離點和醫院，太短就重抽
+        void MakeRoute(Zombie z)
+        {
+            int start = z.node;
+            var roads = map.nodes.Where(n => n.type == NodeType.Road).Select(n => n.id).ToList();
+            int Pick(List<int> c) => c.Count > 0 ? c[z.rng.Next(c.Count)] : -1;
+            List<int> seq = null;
+            for (int k = 0; k < 8; k++)
+            {
+                int w1 = Pick(roads.Where(n => map.dist[start, n] >= 25f && map.dist[start, n] <= 60f).ToList());
+                if (w1 < 0) break;
+                int w2 = Pick(roads.Where(n => n != start && map.dist[w1, n] >= 25f && map.dist[w1, n] <= 60f && map.dist[n, start] >= 20f && map.dist[n, start] <= 70f).ToList());
+                var s = new List<int>();
+                if (w2 >= 0) { s.AddRange(map.Path(start, w1) ?? new List<int>()); s.AddRange(map.Path(w1, w2) ?? new List<int>()); s.AddRange(map.Path(w2, start) ?? new List<int>()); }
+                else { s.AddRange(map.Path(start, w1) ?? new List<int>()); s.AddRange(map.Path(w1, start) ?? new List<int>()); }
+                if (s.Count == 0 || s[s.Count - 1] != start || s.Any(n => map.nodes[n].Safe)) continue;
+                if (seq == null || s.Count > seq.Count) seq = s;   // 留最長的一條
+                if (s.Count >= 10) break;
+            }
+            z.route = new List<int> { start };
+            if (seq != null) z.route.AddRange(seq.Take(seq.Count - 1));
+            z.ri = 1 % z.route.Count;
         }
 
         void UpdateEvents(float dt)
@@ -1347,7 +1464,7 @@ namespace Apocalypse
                     var e = map.FindEdge(p.node, s.node);
                     if (e == null) { Fail(p, s, $"move：{p.node} 與 {s.node} 之間沒有道路"); return; }
                     if (e.blocked) { Fail(p, s, $"move：道路 {p.node}-{s.node} 已封鎖"); return; }
-                    p.nextNode = s.node; p.progress = 0; p.planIndex++;
+                    p.nextNode = s.node; p.progress = 0; p.planIndex++; p.visit++;
                     return;
                 }
                 case "goto":
@@ -1356,7 +1473,7 @@ namespace Apocalypse
                     if (s.node == p.node) { p.planIndex++; return; }
                     int hop = map.next[p.node, s.node];
                     if (hop < 0) { Fail(p, s, $"goto：無法抵達節點 {s.node}"); return; }
-                    p.nextNode = hop; p.progress = 0;
+                    p.nextNode = hop; p.progress = 0; p.visit++;
                     return;
                 }
                 default:
@@ -1526,22 +1643,38 @@ namespace Apocalypse
                     p.cargo.Remove(t.id);
                     if (!(cfg.escape && p.node == extraction))
                         MakeNoise(p.node, cfg.actionNoiseRadius, cfg.actionNoiseDuration, "dropoff");
-                    bool useless = cfg.escape && ((t.type == TaskType.Part && readyAt >= 0) || (t.type == TaskType.Fuel && fuel >= fuelRequired));
-                    int gain = t.reward;
+                    bool useless = cfg.escape && (((t.type == TaskType.Part || t.type == TaskType.Delivery) && readyAt >= 0) || (t.type == TaskType.Fuel && fuel >= fuelRequired));
+                    int gain = ValueAt(t, time);
                     bool onTime = !useless && t.urgent && time <= t.deadline;
-                    if (onTime) gain += t.bonus;
+                    bool late = !useless && t.dueAt >= 0f && time > t.dueAt;
                     if (cfg.escape && t.type == TaskType.Part && cfg.partDecay > 0)
                         gain = Mathf.RoundToInt(gain * cfg.partDecay / (cfg.partDecay + p.parts));
                     if (useless) gain = 0;
                     else if (cfg.escape) gain = ComboGain(p, gain);
                     p.score += gain;
-                    t.status = TaskStatus.Done; t.carrier = -1; t.completedBy = p.id; t.expiresAt = time;
+                    t.status = TaskStatus.Done; t.carrier = -1; t.completedBy = p.id; t.expiresAt = time; t.doneVisit = p.visit;
+                    foreach (var x in tasks)
+                        if (x.after == t.id && x.status == TaskStatus.Locked)
+                        {
+                            x.status = TaskStatus.Announced; x.availableAt = time + x.procDelay;
+                            x.expiresAt = Mathf.Max(x.dueAt + 60f, x.availableAt + 90f);
+                            Log("process", $"零件 #{t.id} 送到加工廠，{x.procDelay:0} 秒後可以把 #{x.id} 送去撤離點", p.node);
+                        }
                     if (cfg.coop && !cfg.escape) ReduceCity(p, gain);
                     if (t.type == TaskType.Part) { parts += t.weight; p.parts += t.weight; }
                     else if (t.type == TaskType.Fuel) { fuel++; p.fuel++; }
                     if (t.type == TaskType.Rescue) { p.rescued++; evacuated++; if (!cfg.coop) cityInfection = Mathf.Max(0, cityInfection - 1.5f); }
                     else if (t.type != TaskType.Part && t.type != TaskType.Fuel) p.delivered++;
-                    Log("done", $"{p.name} 完成{(t.type == TaskType.Rescue ? "救援" : t.type == TaskType.Part ? "零件" : t.type == TaskType.Fuel ? "油桶" : "配送")} #{t.id} +{gain}{(useless ? "（已經不需要了）" : "")}{(onTime ? "（限時獎勵）" : "")}{(cfg.escape && p.combo > 0 ? $"（連續得分 {p.combo + 1} 次）" : "")}");
+                    Log("done", $"{p.name} 完成{(t.type == TaskType.Rescue ? "救援" : t.type == TaskType.Part ? "零件" : t.type == TaskType.Fuel ? "油桶" : "配送")} #{t.id} +{gain}{(useless ? "（已經不需要了）" : "")}{(onTime ? "（限時獎勵）" : "")}{(late ? "（晚到）" : "")}{(cfg.escape && p.combo > 0 ? $"（連續得分 {p.combo + 1} 次）" : "")}");
+                    if (!useless && t.set >= 0)
+                    {
+                        int got = tasks.Count(x => x.set == t.set && x.status == TaskStatus.Done && x.completedBy == p.id && x.doneVisit == p.visit);
+                        if (got == t.setSize)
+                        {
+                            p.score += t.setBonus;
+                            Log("set", $"{p.name} 一趟交齊整套零件（{got} 件），套件獎金 +{t.setBonus}", p.node);
+                        }
+                    }
                     var b = BatchOf(t);
                     if (b != null && cfg.coop)
                     {
@@ -1705,6 +1838,16 @@ namespace Apocalypse
             if (z.wait > 0) { z.wait -= dt; if (FindPrey(z) == null) return; }
 
             DecideZombie(z);
+            if (z.mode == ZombieMode.Patrol)
+            {
+                if (z.route.Count > 1)
+                {
+                    if (z.route[z.ri] == z.node) z.ri = (z.ri + 1) % z.route.Count;
+                    z.nextNode = z.route[z.ri]; z.progress = 0;
+                    z.ri = (z.ri + 1) % z.route.Count;
+                }
+                return;
+            }
             if (z.target >= 0 && z.target != z.node)
             {
                 int hop = map.next[z.node, z.target];
@@ -1713,9 +1856,10 @@ namespace Apocalypse
             }
         }
 
+        // 看到人就追；追的人跑出視線 × zombieLoseMul 就放棄，走回巡邏路線上最近的路口，再接著巡邏
         void DecideZombie(Zombie z)
         {
-            var prey = FindPrey(z);
+            var prey = FindPrey(z, cfg.zombieSight * (z.mode == ZombieMode.Chase ? cfg.zombieLoseMul : 1f));
             if (prey != null)
             {
                 z.mode = ZombieMode.Chase; z.chasing = prey.id;
@@ -1723,37 +1867,122 @@ namespace Apocalypse
                 return;
             }
             z.chasing = -1;
-            var noise = noises.Where(n => Vector2.Distance(z.pos, n.pos) <= n.radius)
-                              .OrderBy(n => Vector2.Distance(z.pos, n.pos)).FirstOrDefault();
-            if (noise != null) { z.mode = ZombieMode.Attracted; z.target = noise.node; return; }
-
-            if (z.mode != ZombieMode.Wander || z.target < 0 || z.target == z.node)
+            if (z.mode == ZombieMode.Chase)
             {
-                z.mode = ZombieMode.Wander;
-                var near = map.nodes.Where(n => !n.Safe && map.dist[z.node, n.id] >= 6f && map.dist[z.node, n.id] <= 18f).ToList();
-                if (near.Count == 0) near = map.nodes.Where(n => !n.Safe && n.id != z.node).ToList();
-                z.target = near.Count > 0 ? near[z.rng.Next(near.Count)].id : -1;
+                int best = 0;
+                for (int k = 1; k < z.route.Count; k++)
+                    if (map.dist[z.node, z.route[k]] < map.dist[z.node, z.route[best]]) best = k;
+                z.mode = ZombieMode.Return; z.ri = best; z.target = z.route[best];
             }
+            if (z.mode == ZombieMode.Return && (z.target < 0 || z.node == z.target)) { z.mode = ZombieMode.Patrol; z.target = -1; }
         }
 
-        public List<int> ZombiePath(Zombie z, int maxLen = 10)
+        // 殭屍接下來會經過的路口：巡邏、走回巡邏路線時是確定的；追人時只到目前的目標
+        public IEnumerable<int> Upcoming(Zombie z)
         {
-            var path = new List<int>();
-            int from = z.node;
-            if (z.nextNode >= 0) { path.Add(z.nextNode); from = z.nextNode; }
-            if (z.target >= 0 && z.target != from)
+            int from = z.nextNode >= 0 ? z.nextNode : z.node;
+            if (z.nextNode >= 0) yield return z.nextNode;
+            if (z.mode == ZombieMode.Chase)
             {
-                var rest = map.Path(from, z.target);
-                if (rest != null) path.AddRange(rest);
+                if (z.target >= 0 && z.target != from)
+                    foreach (int n in map.Path(from, z.target) ?? new List<int>()) yield return n;
+                yield break;
             }
-            if (path.Count > maxLen) path.RemoveRange(maxLen, path.Count - maxLen);
-            return path;
+            int ri = z.ri;
+            if (z.mode == ZombieMode.Return)
+            {
+                foreach (int n in map.Path(from, z.target) ?? new List<int>()) yield return n;
+                from = z.target;
+            }
+            if (z.route.Count < 2) yield break;
+            while (true)
+            {
+                if (z.route[ri] == from) ri = (ri + 1) % z.route.Count;
+                from = z.route[ri];
+                yield return from;
+                ri = (ri + 1) % z.route.Count;
+            }
         }
 
-        Player FindPrey(Zombie z)
+        float dangerAt = -1f;
+        Dictionary<int, List<Vector2>> dangerCache;
+
+        // 每個路口未來 dangerHorizon 秒內「有殭屍在視線範圍內」的時段（絕對時間）
+        public Dictionary<int, List<Vector2>> Danger()
+        {
+            if (dangerCache != null && dangerAt == time) return dangerCache;
+            float R = cfg.zombieSight, now = time, end = now + cfg.dangerHorizon;
+            float t0 = Mathf.Max(now, zombieStunUntil);
+            var win = new Dictionary<int, List<Vector2>>();
+            void Mark(int n, float a, float b)
+            {
+                a -= 0.3f; b += 1.5f; // 殭屍每到一個路口會慢一點點，時段前後多抓一點
+                if (b <= now || a >= end) return;
+                if (!win.TryGetValue(n, out var l)) win[n] = l = new List<Vector2>();
+                l.Add(new Vector2(Mathf.Max(a, now), Mathf.Min(b, end)));
+            }
+            void NearPoint(Vector2 p, float a, float b)
+            {
+                foreach (var nd in map.nodes) if (!nd.Safe && Vector2.Distance(p, nd.pos) <= R) Mark(nd.id, a, b);
+            }
+            void Segment(Vector2 p, Vector2 q, float a, float b)
+            {
+                Vector2 d = q - p;
+                float aa = d.sqrMagnitude;
+                if (aa < 1e-9f) { NearPoint(p, a, b); return; }
+                foreach (var nd in map.nodes)
+                {
+                    if (nd.Safe) continue;
+                    Vector2 f = p - nd.pos;
+                    float bb = 2f * Vector2.Dot(d, f), cc = f.sqrMagnitude - R * R, disc = bb * bb - 4f * aa * cc;
+                    if (disc < 0) continue;
+                    float s = Mathf.Sqrt(disc);
+                    float u1 = Mathf.Max(0f, (-bb - s) / (2f * aa)), u2 = Mathf.Min(1f, (-bb + s) / (2f * aa));
+                    if (u1 <= u2) Mark(nd.id, a + (b - a) * u1, a + (b - a) * u2);
+                }
+            }
+            float speed = Mathf.Max(0.1f, ZombieSpeed);
+            foreach (var z in zombies)
+            {
+                if (z.mode == ZombieMode.Chase) { NearPoint(z.pos, t0, t0 + 5f); continue; }
+                float t = t0; Vector2 at = z.pos; int cur = z.node;
+                if (z.nextNode < 0 && z.wait > 0) { NearPoint(at, t, t + z.wait); t += z.wait; }
+                bool first = z.nextNode >= 0;
+                foreach (int n in Upcoming(z))
+                {
+                    var e = map.FindEdge(cur, n);
+                    float length = e != null ? e.length : Vector2.Distance(at, map.nodes[n].pos);
+                    if (first) { length *= 1f - z.progress; first = false; }
+                    float dt = length / speed;
+                    Segment(at, map.nodes[n].pos, t, t + dt);
+                    t += dt; at = map.nodes[n].pos; cur = n;
+                    if (t >= end) break;
+                }
+            }
+            var outp = new Dictionary<int, List<Vector2>>();
+            foreach (var kv in win)
+            {
+                var ws = kv.Value.OrderBy(v => v.x).ThenBy(v => v.y).ToList();
+                var merged = new List<Vector2> { ws[0] };
+                for (int i = 1; i < ws.Count; i++)
+                {
+                    if (ws[i].x <= merged[merged.Count - 1].y) merged[merged.Count - 1] = new Vector2(merged[merged.Count - 1].x, Mathf.Max(merged[merged.Count - 1].y, ws[i].y));
+                    else merged.Add(ws[i]);
+                }
+                outp[kv.Key] = merged;
+            }
+            dangerAt = time; dangerCache = outp;
+            return outp;
+        }
+
+        public List<int> ZombiePath(Zombie z, int maxLen = 10) => Upcoming(z).Take(maxLen).ToList();
+
+        Player FindPrey(Zombie z) => FindPrey(z, cfg.zombieSight);
+
+        Player FindPrey(Zombie z, float sight)
         {
             Player prey = null;
-            float best = cfg.zombieSight;
+            float best = sight;
             foreach (var p in players)
             {
                 if (p.state != PlayerState.Active || (p.nextNode < 0 && IsSafe(p.node))) continue;
