@@ -75,19 +75,43 @@ games = test_local(my_make_policy, seeds=[1, 2, 3], name=MY_NAME, map=SERVER_URL
 
 `map=` 也可以填 JSON 檔的路徑。
 
-畫完的地圖建議先試玩幾場，看全班贏不贏得了。用 notebook 的 Routing 範例跑 5 個 seed：
+## 測難度
 
-```python
-games = test_local(routing_make_policy, seeds=[1, 2, 3, 4, 5], name=MY_NAME, map="我的地圖.json")
+只玩一兩場看不準：seed 會改變零件、殭屍、事件出現的方式，同一張地圖換個 seed 可能從輕鬆贏變成全滅。比較準的做法是用同一班 bot、跑很多個 seed，再跟隨機地圖比。
+
+`test_map.py` 會幫你做這件事（需要 Python，跟遊戲同一個資料夾結構）：
+
+```bash
+python test_map.py my_map.json
+python test_map.py my_map.json --seeds 1-30
 ```
 
-5 場裡至少贏 3 場比較適合上課。都輸的話，通常是工廠太遠，或撤離點太靠邊。
+它會：
+
+1. 用 12 隻內建的同學 bot，在你的地圖上跑 20 個 seed（`--seeds` 可以改）
+2. 再用同一批 seed 跑隨機地圖當對照
+3. 印出全班贏的比例、直升機平均幾秒修好、輸的原因（零件湊不齊、油不夠、全員倒下），以及每個 seed 的輸贏
+
+結果的看法：
+
+- 贏的比例 60% 以上：可以上課用
+- 30%–60%：偏難，可以把工廠拉近撤離點，或把撤離點放中間一點
+- 30% 以下：太難，先看編輯器右邊的黃色提醒
+- 跟隨機地圖差很多的話，代表這張圖特別簡單或特別難，可以照上課需要選
+
+跑越多 seed 越準，至少 20 個；電腦核心多的話用 `--jobs` 同時跑更多場。
+
+想看實際的樣子，也可以在 Colab 用 notebook 的範例玩幾場：
+
+```python
+games = test_local(routing_make_policy, seeds=[1, 2, 3], name=MY_NAME, map="my_map.json")
+```
 
 ## 檔案格式
 
 ```json
 {
-  "name": "我的地圖",
+  "name": "my_map",
   "nodes": [ { "x": 0, "y": 0, "type": "extraction" }, { "x": 6, "y": 0, "type": "road", "infected": true } ],
   "edges": [ { "a": 0, "b": 1 }, { "a": 1, "b": 2, "bridge": true } ],
   "river": [ { "x": 9, "y": -3 }, { "x": 9, "y": 9 } ],
