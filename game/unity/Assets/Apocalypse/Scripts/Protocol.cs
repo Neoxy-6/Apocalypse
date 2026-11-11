@@ -9,10 +9,11 @@ namespace Apocalypse
 
     [Serializable] public class NodeDto { public int id; public string type; public float x, y, infection; public int medkits, weapons; public bool safe, powered; public string district; }
     [Serializable] public class EdgeDto { public int id, a, b; public float length; public bool blocked, bridge; public float blocked_until; }
-    [Serializable] public class TaskDto { public int id; public string type; public int origin, dest, weight, reward, bonus, batch; public bool urgent; public float deadline, expires_at, available_at; public string status; public int carrier; }
+    [Serializable] public class TaskDto { public int id; public string type; public int origin, dest, weight, reward, bonus, batch; public bool urgent; public float deadline, expires_at, available_at; public string status; public int carrier; public float due_at, late_per_sec; public int min_reward, set, set_bonus, set_size, after; public float proc_delay; }
     [Serializable] public class BatchDto { public int id, origin, owner, bonus, delivered; public float deadline; public bool paid, failed; public int[] tasks; }
     [Serializable] public class PlayerDto { public int id; public string name, color, state, bot; public int node, next_node, score, load, delivered, rescued, downs; public float progress, x, y, hp, infection, downed_timer, city_reduced; public string role; public int[] targets; public int parts; public bool escaped; public int[] fixing; public int @fixed, fuel, combo, ammo, kills; }
-    [Serializable] public class ZombieDto { public int id, node, next_node, from_player, target, chasing; public string mode; public float x, y, progress; public int[] path; }
+    [Serializable] public class ZombieDto { public int id, node, next_node, from_player, target, chasing; public string mode; public float x, y, progress; public int[] path, route; public int route_index; }
+    [Serializable] public class DangerDto { public int node; public float[] windows; }
     [Serializable] public class NoiseDto { public int id, node; public float x, y, radius, until; public string source; }
     [Serializable] public class EventDto { public float time; public string type, text; }
     [Serializable] public class StepDto { public string action; public int node = -1, task = -1, target = -1; public float seconds; }
@@ -49,7 +50,7 @@ namespace Apocalypse
     {
         public bool enabled;
         public int extraction, parts, parts_required, escape_bonus;
-        public float ready_at, repair_at, depart_at, zone_x, zone_y, zone_radius, zone_damage;
+        public float ready_at, depart_at, zone_x, zone_y, zone_radius, zone_damage;
         public int evacuated;
         public float speed_boost_until, guard_down_until, zombie_stun_until, infection_guard_until;
         public bool heli_boost;
@@ -77,6 +78,7 @@ namespace Apocalypse
         public ZombieDto[] zombies;
         public NoiseDto[] noises;
         public float zombie_speed;
+        public DangerDto[] danger;
         public EventDto[] events;
     }
 
@@ -193,7 +195,7 @@ namespace Apocalypse
                 escape = new EscapeDto
                 {
                     enabled = cfg.escape, extraction = sim.extraction, parts = sim.parts, parts_required = sim.partsRequired,
-                    ready_at = sim.readyAt, repair_at = sim.RepairGate, depart_at = sim.departAt, zone_x = sim.map.nodes[sim.extraction].pos.x,
+                    ready_at = sim.readyAt, depart_at = sim.departAt, zone_x = sim.map.nodes[sim.extraction].pos.x,
                     zone_y = sim.map.nodes[sim.extraction].pos.y, zone_radius = sim.ZoneRadius, zone_damage = cfg.zoneDamage,
                     escape_bonus = cfg.escapeBonus, evacuated = sim.evacuated, speed_boost_until = sim.speedBoostUntil,
                     guard_down_until = sim.guardDownUntil, heli_boost = sim.heliBoost, zombie_stun_until = sim.zombieStunUntil, infection_guard_until = sim.infectionGuardUntil,
@@ -228,11 +230,12 @@ namespace Apocalypse
                     id = e.id, a = e.a, b = e.b, length = e.length, blocked = e.blocked, bridge = e.bridge,
                     blocked_until = e.blocked ? e.blockedUntil : 0,
                 }).ToArray(),
-                tasks = sim.tasks.Where(t => t.status == TaskStatus.Announced || t.status == TaskStatus.Open || t.status == TaskStatus.Carried).Select(t => new TaskDto
+                tasks = sim.tasks.Where(t => t.status == TaskStatus.Announced || t.status == TaskStatus.Open || t.status == TaskStatus.Carried || t.status == TaskStatus.Locked).Select(t => new TaskDto
                 {
                     id = t.id, type = Lower(t.type), origin = t.origin, dest = t.dest, weight = t.weight, reward = t.reward, bonus = t.bonus,
                     urgent = t.urgent, deadline = t.deadline, expires_at = t.expiresAt, status = Lower(t.status), carrier = t.carrier,
                     batch = t.batch, available_at = t.availableAt,
+                    due_at = t.dueAt, late_per_sec = t.latePerSec, min_reward = t.minReward, set = t.set, set_bonus = t.setBonus, set_size = t.setSize, after = t.after, proc_delay = t.procDelay,
                 }).ToArray(),
                 batches = sim.batches.Values.Where(b => b.tasks.Any(id => sim.TaskById(id) is GameTask bt &&
                         bt.status <= TaskStatus.Carried)).Select(b => new BatchDto
@@ -251,13 +254,18 @@ namespace Apocalypse
                 {
                     id = z.id, node = z.node, next_node = z.nextNode, x = z.pos.x, y = z.pos.y, from_player = z.fromPlayer,
                     progress = z.progress, mode = Lower(z.mode), target = z.target, chasing = z.chasing,
-                    path = sim.ZombiePath(z).ToArray(),
+                    path = sim.ZombiePath(z).ToArray(), route = z.route.ToArray(), route_index = z.ri,
                 }).ToArray(),
                 noises = sim.noises.Select(n => new NoiseDto
                 {
                     id = n.id, node = n.node, x = n.pos.x, y = n.pos.y, radius = n.radius, until = n.until, source = n.source,
                 }).ToArray(),
                 zombie_speed = sim.ZombieSpeed,
+                danger = sim.Danger().OrderBy(kv => kv.Key).Select(kv => new DangerDto
+                {
+                    node = kv.Key,
+                    windows = kv.Value.SelectMany(v => new[] { Mathf.Round(v.x * 10f) / 10f, Mathf.Round(v.y * 10f) / 10f }).ToArray(),
+                }).ToArray(),
                 events = sim.events.Skip(Math.Max(0, sim.events.Count - 20))
                     .Select(e => new EventDto { time = e.time, type = e.type, text = e.text }).ToArray(),
                 you = new YouDto(),
