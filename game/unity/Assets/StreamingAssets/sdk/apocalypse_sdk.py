@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import heapq
+import math
 import time
 import types
 from typing import Callable, Iterable
@@ -8,7 +9,7 @@ from typing import Callable, Iterable
 import requests
 
 __all__ = [
-    "Game", "State", "CityGraph", "ApiError", "benchmark", "test_local", "play", "draw", "replay", "replay_match", "load_map",
+    "Game", "State", "CityGraph", "TripProblem", "ApiError", "benchmark", "test_local", "play", "draw", "replay", "replay_match", "load_map",
     "move", "goto", "pickup", "dropoff", "take_medkit", "use_medkit", "heal", "revive", "wait", "fix",
     "take_weapon", "drop", "drop_medkit", "drop_weapon",
 ]
@@ -62,6 +63,11 @@ class State:
 
         self.incidents: list[dict] = raw.get("incidents", [])
 
+        # 每個路口接下來 60 秒有殭屍在視線範圍內的時段：{路口: [(開始, 結束), ...]}，時間是 st.time 的單位
+        self.danger: dict[int, list[tuple[float, float]]] = {
+            d["node"]: [(d["windows"][i], d["windows"][i + 1]) for i in range(0, len(d["windows"]), 2)]
+            for d in raw.get("danger", [])}
+
     @property
     def here(self) -> int:
         y = self.you
@@ -111,11 +117,42 @@ class State:
     def tasks_batch(self, t: dict):
         return self.batches.get(t.get("batch", -1))
 
+    def value_of(self, t: dict, arrive: float) -> int:
+        """在 arrive 秒送到時這件值幾分（不含套件獎金）。過了 due_at 每秒少 late_per_sec，最低 min_reward。"""
+        v = t["reward"]
+        due = t.get("due_at", -1)
+        if due >= 0 and arrive > due:
+            v = max(t.get("min_reward", 0), round(t["reward"] - t.get("late_per_sec", 0) * (arrive - due)))
+        if t.get("urgent") and arrive <= t.get("deadline", -1):
+            v += t.get("bonus", 0)
+        return v
+
+    def set_of(self, t: dict) -> list[dict]:
+        """和 t 同一套、還沒交的零件（包含 t 自己）。不是套件就回傳 [t]。
+        長度比 t["set_size"] 少，代表有一件已經被交掉或消失，這套就拿不到獎金了。"""
+        s = t.get("set", -1)
+        if s < 0:
+            return [t]
+        return [x for x in self.tasks.values() if x.get("set", -1) == s]
+
+    def danger_windows(self, node: int) -> list[tuple[float, float]]:
+        """這個路口接下來哪些時段有殭屍在附近。沒有就是 []。"""
+        return self.danger.get(node, [])
+
+    def is_dangerous(self, node: int, t0: float, t1: float | None = None) -> bool:
+        """t0 到 t1 秒之間（只給 t0 就是那一刻），這個路口有沒有殭屍在附近。"""
+        t1 = t0 if t1 is None else t1
+        return any(a <= t1 and t0 <= b for a, b in self.danger.get(node, []))
+
     def my_cargo(self) -> list[dict]:
         return [self.tasks[i] for i in self.you["cargo"] if i in self.tasks]
 
     def nodes_of(self, type_: str) -> list[int]:
         return [n["id"] for n in self.nodes.values() if n["type"] == type_]
+
+    def trip_problem(self, g: "CityGraph | None" = None, max_tasks: int = 16) -> "TripProblem":
+        """把這一趟能考慮的東西整理成 OR-Tools 能直接用的資料，見 TripProblem。"""
+        return TripProblem(self, g, max_tasks)
 
     def powered(self, node_id: int) -> bool:
         return bool(self.nodes[node_id].get("powered", False))
@@ -129,9 +166,12 @@ class State:
 class CityGraph:
 
     def __init__(self, state: State, danger_weight: float = 0.0, zombie_penalty: float = 0.0, zombie_radius: float = 3.0,
-                 zombie_lookahead: float = 0.0):
+                 zombie_lookahead: float = 0.0, danger_penalty: float = 0.0, speed: float | None = None):
+        # danger_penalty：照「走到那個路口的時間」查 st.danger，那時候有殭屍就多算幾格
         self.state = state
-        self.adj: dict[int, list[tuple[int, float]]] = {n: [] for n in state.nodes}
+        self.danger_penalty = danger_penalty
+        self.speed = speed or state.you.get("speed") or state.rules.get("player_speed", 3.0)
+        self.adj: dict[int, list[tuple[int, float, float]]] = {n: [] for n in state.nodes}
         near = {n: 0.0 for n in state.nodes}
         if zombie_penalty > 0:
             for z in state.zombies:
@@ -153,22 +193,25 @@ class CityGraph:
             a, b = e["a"], e["b"]
             inf = (state.nodes[a]["infection"] + state.nodes[b]["infection"]) / 2
             w = e["length"] * (1 + danger_weight * inf) + zombie_penalty * (near[a] + near[b])
-            self.adj[a].append((b, w))
-            self.adj[b].append((a, w))
+            self.adj[a].append((b, w, e["length"]))
+            self.adj[b].append((a, w, e["length"]))
         self._cache: dict[int, tuple[dict, dict]] = {}
 
     def dijkstra(self, src: int):
         if src not in self._cache:
-            dist, prev = {src: 0.0}, {}
+            dist, prev, at = {src: 0.0}, {}, {src: self.state.time}
             pq = [(0.0, src)]
             while pq:
                 d, u = heapq.heappop(pq)
                 if d > dist.get(u, float("inf")):
                     continue
-                for v, w in self.adj[u]:
+                for v, w, length in self.adj[u]:
+                    t = at[u] + length / self.speed
                     nd = d + w
+                    if self.danger_penalty > 0 and self.state.is_dangerous(v, t):
+                        nd += self.danger_penalty
                     if nd < dist.get(v, float("inf")):
-                        dist[v], prev[v] = nd, u
+                        dist[v], prev[v], at[v] = nd, u, t
                         heapq.heappush(pq, (nd, v))
             self._cache[src] = (dist, prev)
         return self._cache[src]
@@ -197,6 +240,124 @@ class CityGraph:
     def nearest(self, src: int, candidates: Iterable[int]):
         best = min(candidates, key=lambda n: self.dist(src, n), default=None)
         return best
+
+class TripProblem:
+    """這一趟的建模資料：直接對到 OR-Tools Routing 的各個東西。
+
+    點的編號：START（你現在的位置）、END（撤離點），其他每件東西有一個「撿」點和一個「交」點。
+    時間都是「從現在起算的秒數」（整數），分數都是整數。
+
+      size          總共幾個點
+      START, END    起點、終點的編號
+      nodes[i]      第 i 個點在地圖上的路口
+      time[i][j]    從 i 走到 j 要幾秒（含撿／交的 1 秒，已經避開殭屍）
+      pairs         [(撿, 交), ...]：撿了就要送到
+      task[i]       第 i 個點是哪件委託（START、END 是 None）
+      value[i]      撿點 i：準時送到值幾分
+      demand[i]     背包重量變化：撿點 +重量、交點 −重量
+      capacity      背包上限；load 是現在背了多少
+      open[i]       撿點 i 最早幾秒後才能撿
+      due[i]        交點 i 的期限（幾秒後），沒有期限是 None
+      late[i]       交點 i 晚一秒扣幾分
+      danger[i]     撿點 i 有殭屍經過的時段 [(開始, 結束), ...]
+      sets          [([撿點, ...], 套件獎金), ...]：同一套的撿點，一起撿才有獎金
+      after         [(前一段的交點, 這一段的撿點, 加工秒數), ...]：要先把前一段送到加工廠，等加工完才能撿
+      must          背包裡已經有的東西，它們的交點一定要去
+    """
+
+    START, END = 0, 1
+
+    def __init__(self, st: "State", g: "CityGraph | None" = None, max_tasks: int = 16):
+        self.st = st
+        self.g = g or CityGraph(st, zombie_penalty=3, zombie_lookahead=10, danger_penalty=8)
+        me, ex, now = st.you, st.extraction, st.time
+        speed = max(0.5, me["speed"])
+        e = st.escape
+        self.capacity, self.load = st.rules["capacity"], me["load"]
+
+        def useless(t):
+            return (t["type"] in ("part", "delivery") and e.get("ready_at", -1) >= 0) or \
+                   (t["type"] == "fuel" and e.get("fuel", 0) >= e.get("fuel_required", 0))
+
+        follow = {t["after"]: t for t in st.tasks.values() if t.get("status") == "locked" and t.get("after", -1) >= 0}
+        claimed = st.claimed_tasks()
+        pool = [t for t in st.open_tasks() + st.announced_tasks()
+                if t["id"] not in claimed and not useless(t) and t["weight"] <= self.capacity - self.load]
+
+        def rate(t):
+            d = self.g.dist(st.here, t["origin"]) + self.g.dist(t["origin"], t["dest"])
+            nxt = follow.get(t["id"])
+            if nxt:
+                d += self.g.dist(nxt["origin"], ex)
+            return (t["reward"] + (nxt["reward"] if nxt else 0)) / (d + 5)
+        picked = sorted(pool, key=rate, reverse=True)[:max_tasks]
+        for t in list(picked):  # 套件的其他件也放進來，才能一起排
+            picked += [x for x in st.set_of(t) if x in pool and x not in picked]
+
+        self.nodes, self.task, self.kind = [st.here, ex], [None, None], ["start", "end"]
+        self.pairs, self.must, self.after = [], [], []
+
+        def add_follow(t, drop):  # 送去加工的那件，後面那一段也一起排
+            nxt = follow.get(t["id"])
+            if nxt and not useless(nxt):
+                pk = self._add(nxt["origin"], nxt, "pick")
+                self.pairs.append((pk, self._add(nxt["dest"], nxt, "drop")))
+                self.after.append((drop, pk, int(math.ceil(nxt.get("proc_delay", 0)))))
+        for t in picked:
+            pk, dr = self._add(t["origin"], t, "pick"), self._add(t["dest"], t, "drop")
+            self.pairs.append((pk, dr))
+            add_follow(t, dr)
+        for t in st.my_cargo():
+            if not useless(t):
+                dr = self._add(t["dest"], t, "drop")
+                self.must.append(dr)
+                add_follow(t, dr)
+
+        n = self.size = len(self.nodes)
+        secs = lambda a, b: 0 if a == b else int(math.ceil(self.g.dist(a, b) / speed))
+        self.time = [[0 if i == j else secs(self.nodes[i], self.nodes[j]) + (1 if self.kind[j] in ("pick", "drop") else 0)
+                      for j in range(n)] for i in range(n)]
+        self.value, self.demand, self.open = [0] * n, [0] * n, [0] * n
+        self.due, self.late, self.danger = [None] * n, [0] * n, [[] for _ in range(n)]
+        for i in range(n):
+            t = self.task[i]
+            if t is None:
+                continue
+            if self.kind[i] == "pick":
+                self.value[i] = int(t["reward"])
+                self.demand[i] = t["weight"]
+                self.open[i] = max(0, int(math.ceil(t["available_at"] - now)))   # 還鎖著的是 0，由 after 決定
+                self.danger[i] = [(max(0, int(a - now)), int(math.ceil(b - now))) for a, b in st.danger_windows(t["origin"]) if b > now]
+            else:
+                self.demand[i] = -t["weight"]
+                if t.get("due_at", -1) >= 0:
+                    self.due[i] = max(0, int(t["due_at"] - now))
+                    self.late[i] = max(1, round(t.get("late_per_sec", 0)))
+        groups = {}
+        for pk, _ in self.pairs:
+            s = self.task[pk].get("set", -1)
+            if s >= 0:
+                groups.setdefault(s, []).append(pk)
+        self.sets = [(ks, self.task[ks[0]]["set_bonus"]) for ks in groups.values()
+                     if len(ks) == self.task[ks[0]].get("set_size", 0) and len(ks) > 1]
+
+    def _add(self, node, t, kind):
+        self.nodes.append(node)
+        self.task.append(t)
+        self.kind.append(kind)
+        return len(self.nodes) - 1
+
+    def to_plan(self, order: list[int]) -> list[dict]:
+        """把解出來的點的順序（不含 START、END 也可以）變成可以送出的行動。"""
+        steps, at = [], self.st.here
+        for i in order:
+            if self.kind[i] not in ("pick", "drop"):
+                continue
+            steps += self.g.path_steps(at, self.nodes[i])
+            steps.append(pickup(self.task[i]["id"]) if self.kind[i] == "pick" else dropoff(self.task[i]["id"]))
+            at = self.nodes[i]
+        return steps
+
 
 class Game:
     def __init__(self, url: str, token: str | None = None, timeout: float = 10.0):
