@@ -188,7 +188,7 @@ namespace Apocalypse
         void SurvivorList(float H)
         {
             var ranking = Sim.Ranking();
-            const float x = 16, w = 390, rowH = 36, top = 190, bottom = 40;
+            const float x = 16, w = 440, rowH = 36, top = 190, bottom = 40;
             float maxRows = Mathf.Floor((H - bottom - top) / rowH);
             int rows = (int)Mathf.Min(ranking.Count, maxRows);
             float y0 = Mathf.Max(top, (H - rows * rowH) / 2f + 50f);
@@ -211,8 +211,11 @@ namespace Apocalypse
                     : Sim.ComboOf(u) > 0 ? $"<color={WcBeigeHex}>×{Sim.ComboOf(u) + 1}</color>" : "";
                 string nm = Fit(t.name, wcName, stat.Length > 0 ? 120 : 160);
                 GUI.Label(new Rect(x + 62, y, 170, rowH - 6), gone || downed ? $"<color={WcSoftHex}>{nm}</color>" : $"<color=#f6f1ee>{nm}</color>", wcName);
-                // 狀態靠右、貼在分數左邊，字再長也不會蓋到分數
-                GUI.Label(new Rect(x + w - 92 - 126, y, 120, rowH - 6), stat, new GUIStyle(wcSmall) { fontSize = 13, alignment = TextAnchor.MiddleRight });
+                // 狀態靠右、貼在擊倒數左邊，字再長也不會蓋到分數
+                GUI.Label(new Rect(x + w - 92 - 56 - 124, y, 120, rowH - 6), stat, new GUIStyle(wcSmall) { fontSize = 13, alignment = TextAnchor.MiddleRight });
+                // 射倒的殭屍數，沒有就不顯示
+                if (u.kills > 0)
+                    GUI.Label(new Rect(x + w - 92 - 60, y, 58, rowH - 6), $"<color=#b9f6ca><b>擊倒 {u.kills}</b></color>", new GUIStyle(wcSmall) { fontSize = 15, alignment = TextAnchor.MiddleRight });
                 GUI.Label(new Rect(x + w - 92, y, 80, rowH - 6), $"<color={WcBeigeHex}>{t.Score}</color>", wcScore);
             }
         }

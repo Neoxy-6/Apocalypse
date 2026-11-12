@@ -1500,9 +1500,9 @@ namespace Apocalypse
             }
             GUI.Label(new Rect(r.x, r.y + 16, r.width, 50), head, title);
             GUI.Label(new Rect(r.x, r.y + 68, r.width, 26), $"<color=#aaa>{sub}</color>", center);
-            string[] cols = esc ? new[] { "名次", "玩家", "分數", "零件", "救援", "事件", "油桶", "救人", "倒地", "逃出" }
+            string[] cols = esc ? new[] { "名次", "玩家", "分數", "零件", "救援", "事件", "油桶", "擊倒", "救人", "倒地", "逃出" }
                                 : new[] { "名次", "玩家", "分工", "分數", "壓低感染", "配送", "救援", "倒地", "撤離" };
-            float[] xs = esc ? new float[] { 24, 84, 320, 410, 495, 580, 660, 740, 815, 870 } : new float[] { 24, 84, 330, 420, 500, 610, 680, 750, 820 };
+            float[] xs = esc ? new float[] { 24, 84, 300, 380, 455, 530, 600, 670, 740, 805, 865 } : new float[] { 24, 84, 330, 420, 500, 610, 680, 750, 820 };
 
             var all = ranking.Select(t => t.units[0]).ToList();
             string Star(int v, System.Func<Player, int> stat) =>
@@ -1517,9 +1517,9 @@ namespace Apocalypse
                 string[] vals = esc
                     ? new[]
                     {
-                        $"<b>{i + 1}</b>", $"<color=#{Hex(t.color)}>●</color> {Fit(t.name, label, 220)}", $"<b>{t.Score}</b>",
+                        $"<b>{i + 1}</b>", $"<color=#{Hex(t.color)}>●</color> {Fit(t.name, label, 200)}", $"<b>{t.Score}</b>",
                         Star(u.parts, q => q.parts), Star(u.rescued, q => q.rescued), Star(u.fixedCount, q => q.fixedCount),
-                        Star(u.fuel, q => q.fuel), Star(u.revives, q => q.revives), u.downs.ToString(),
+                        Star(u.fuel, q => q.fuel), Star(u.kills, q => q.kills), Star(u.revives, q => q.revives), u.downs.ToString(),
                         u.escaped ? "<color=#a5d6a7>✓</color>" : "<color=#777>-</color>",
                     }
                     : new[]
