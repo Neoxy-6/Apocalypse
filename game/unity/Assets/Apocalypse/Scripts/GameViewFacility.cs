@@ -128,14 +128,28 @@ namespace Apocalypse
             {
                 if (time <= lastPlayerShot) continue;
                 lastPlayerShot = time;
-                Burst(W(to, 0.5f), new Color(1f, 0.85f, 0.4f, 1f), new Color(1f, 0.5f, 0.2f, 0.8f), 10, 2.2f, 0.07f, 0.3f, 0.5f, 0.1f);
-                var lr = NewLine(dynRoot, 0.05f, 9);
-                lr.startColor = new Color(1f, 0.95f, 0.6f, 1f);
-                lr.endColor = new Color(1f, 0.7f, 0.3f, 0.6f);
+                var shooter = Sim.players.Where(q => q.state == PlayerState.Active).OrderBy(q => (q.pos - from).sqrMagnitude).FirstOrDefault();
+                if (shooter != null && playerViews.TryGetValue(shooter.id, out var pv))
+                {
+                    pv.aim = new Vector3(to.x - from.x, 0, to.y - from.y);
+                    pv.aimUntil = now + 0.6f;
+                }
+                // 槍口火光
+                Burst(W(from + (to - from).normalized * 0.6f, 0.7f), new Color(1f, 0.95f, 0.6f, 1f), new Color(1f, 0.6f, 0.15f, 1f), 18, 3f, 0.22f, 0.15f, 0f, 0.08f);
+                // 命中：火花、綠色碎塊、一圈衝擊波
+                Burst(W(to, 0.5f), new Color(1f, 0.9f, 0.45f, 1f), new Color(1f, 0.45f, 0.15f, 1f), 30, 4f, 0.14f, 0.4f, 0.6f, 0.15f);
+                Burst(W(to, 0.4f), new Color(0.45f, 0.7f, 0.3f, 1f), new Color(0.25f, 0.4f, 0.18f, 0.9f), 24, 3f, 0.18f, 0.7f, 1.2f, 0.2f);
+                var hit = NewOutcome("rifle_hit", 0.45f, now);
+                var ring = FxRing(hit.root, to, new Color(1f, 0.85f, 0.4f, 0.9f), 0.3f, 0.08f);
+                hit.tick = (k, t) => { ring.transform.localScale = Vector3.one * Mathf.Lerp(0.3f, 2.2f, k); ring.color = new Color(1f, 0.85f, 0.4f, 0.9f * (1f - k)); };
+                Shake(0.06f);
+                var lr = NewLine(dynRoot, 0.13f, 9);
+                lr.startColor = new Color(1f, 0.97f, 0.7f, 1f);
+                lr.endColor = new Color(1f, 0.65f, 0.25f, 0.8f);
                 lr.alignment = LineAlignment.View;
-                lr.SetPosition(0, W(from, 0.6f));
+                lr.SetPosition(0, W(from, 0.7f));
                 lr.SetPosition(1, W(to, 0.5f));
-                tracers.Add((lr, now + 0.12f));
+                tracers.Add((lr, now + 0.22f));
             }
             for (int i = tracers.Count - 1; i >= 0; i--)
                 if (tracers[i].line == null || now > tracers[i].until)

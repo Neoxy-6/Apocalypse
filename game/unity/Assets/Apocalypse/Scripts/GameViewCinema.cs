@@ -256,8 +256,14 @@ namespace Apocalypse
             Part(v.head, PrimitiveType.Sphere, new Color(0.9f, 0.88f, 0.84f), top + new Vector3(0, 0.05f, -0.03f), Vector3.one * 0.08f);
             v.gun = new GameObject("gun");
             v.gun.transform.SetParent(v.armR, false);
-            Part(v.gun.transform, PrimitiveType.Cube, new Color(0.16f, 0.17f, 0.18f), new Vector3(0, 0.08f, 0.26f), new Vector3(0.07f, 0.09f, 0.5f));
-            Part(v.gun.transform, PrimitiveType.Cube, new Color(0.35f, 0.24f, 0.14f), new Vector3(0, 0.02f, 0.06f), new Vector3(0.06f, 0.12f, 0.1f));
+            // 步槍：槍管、槍身、槍托、彈匣、瞄準鏡
+            var metal = new Color(0.16f, 0.17f, 0.18f); var wood = new Color(0.42f, 0.27f, 0.14f);
+            Part(v.gun.transform, PrimitiveType.Cube, metal, new Vector3(0, 0.1f, 0.62f), new Vector3(0.06f, 0.06f, 0.7f));
+            Part(v.gun.transform, PrimitiveType.Cube, metal, new Vector3(0, 0.1f, 0.18f), new Vector3(0.11f, 0.15f, 0.42f));
+            Part(v.gun.transform, PrimitiveType.Cube, wood, new Vector3(0, 0.06f, -0.16f), new Vector3(0.1f, 0.16f, 0.32f));
+            Part(v.gun.transform, PrimitiveType.Cube, metal, new Vector3(0, -0.04f, 0.24f), new Vector3(0.07f, 0.2f, 0.09f));
+            Part(v.gun.transform, PrimitiveType.Cylinder, new Color(0.1f, 0.1f, 0.11f), new Vector3(0, 0.22f, 0.2f), new Vector3(0.07f, 0.12f, 0.07f), new Vector3(90f, 0, 0));
+            Part(v.gun.transform, PrimitiveType.Cube, new Color(1f, 0.55f, 0.2f), new Vector3(0, 0.1f, 0.98f), new Vector3(0.07f, 0.07f, 0.04f), default, true);
             v.gun.SetActive(false);
             v.glow = Flat(dynRoot, soft, new Color(p.color.r, p.color.g, p.color.b, 0.35f), 2.0f, 5, 0.03f);
             v.dust = Particles(v.body.transform, Vector3.zero, new Color(0.55f, 0.5f, 0.45f, 0.45f), new Color(0.4f, 0.38f, 0.35f, 0.35f), 0f, 0.7f, 0.4f, 0.25f, -0.05f, new Vector3(0.2f, 0.2f, 0.05f), 0.2f, 0f, 5);
@@ -296,6 +302,7 @@ namespace Apocalypse
                 v.facing = Quaternion.Slerp(v.facing, Quaternion.LookRotation(new Vector3(delta.x, 0, delta.y)), 1f - Mathf.Exp(-10f * dt));
                 v.walk += dt * 9f;
             }
+            if (Time.unscaledTime < v.aimUntil && v.aim.sqrMagnitude > 1e-4f) v.facing = Quaternion.LookRotation(v.aim);
             float w = v.walk;
             if (downed)
             {

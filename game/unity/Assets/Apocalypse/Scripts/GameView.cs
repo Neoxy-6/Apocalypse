@@ -16,6 +16,7 @@ namespace Apocalypse
             public Vector2 lastPos; public float walk; public Quaternion facing = Quaternion.identity; public Color furColor;
             public Renderer[] parts; public Color[] baseColors; public float lastHp = 100f, flash, lastHitFx = -9f;
             public Renderer eyeL, eyeR; public SpriteRenderer swirlL, swirlR; public float deadAt = -1f;
+            public Vector3 aim; public float aimUntil = -1f;   // 開槍時暫時轉向目標
             public readonly List<Vector3> trail = new List<Vector3>();
             public GameObject gun;
         }
@@ -190,7 +191,7 @@ namespace Apocalypse
             if (mapRoot) Destroy(mapRoot.gameObject);
             if (dynRoot) Destroy(dynRoot.gameObject);
             heat.Clear(); roads.Clear(); supplyViews.Clear(); incidentViews.Clear(); incidentFx.Clear(); dyingZombies.Clear(); guardRoot = null;
-            playerViews.Clear(); zombieViews.Clear(); noiseViews.Clear(); piles.Clear();
+            playerViews.Clear(); zombieViews.Clear(); noiseViews.Clear(); piles.Clear(); sideCache.Clear();
             mapRoot = new GameObject("Map").transform;
             dynRoot = new GameObject("Dynamic").transform;
             var map = Sim.map;
@@ -621,12 +622,26 @@ namespace Apocalypse
             }
         }
 
-        Vector2 PileBase(int node)
+        // 貨物和平民分別放在路口旁兩個不同的街廓角落：有建築的路口避開建築那一角，
+        // 沒建築的路口挑離道路、河最遠的兩角
+        readonly Dictionary<int, (Vector2 goods, Vector2 crowd)> sideCache = new Dictionary<int, (Vector2, Vector2)>();
+        (Vector2 goods, Vector2 crowd) Sides(int node)
         {
+            if (sideCache.TryGetValue(node, out var s)) return s;
             var n = Sim.map.nodes[node].pos;
-            if (!facilityDir.TryGetValue(node, out var d)) return n + new Vector2(0.55f, -0.55f);
-            return n + d * 0.9f + new Vector2(d.y, -d.x) * 0.75f;
+            float Score(Vector2 p) => Mathf.Min(RoadClearance(p), 3f) + (riverLine.Count > 1 && CityMap.RiverDistance(riverLine, p) < 2.2f ? -6f : 0f);
+            var dirs = new[] { new Vector2(1, 1), new Vector2(1, -1), new Vector2(-1, 1), new Vector2(-1, -1) }.Select(d => d.normalized);
+            if (facilityDir.TryGetValue(node, out var f)) dirs = dirs.Where(d => Vector2.Dot(d, f) < 0.5f);
+            var best = dirs.OrderByDescending(d => Score(n + d * 1.5f)).ToList();
+            s = (best[0], best.Count > 1 ? best[1] : -best[0]);
+            sideCache[node] = s;
+            return s;
         }
+        Vector2 PileBase(int node) => Sim.map.nodes[node].pos + Sides(node).goods * 1.5f;
+        Vector2 CrowdBase(int node) => Sim.map.nodes[node].pos + Sides(node).crowd * 1.5f;
+        static Vector2 Perp(Vector2 d) => new Vector2(-d.y, d.x);
+
+        const int PileCols = 3, PileRows = 3, PileLayers = 2;
 
         Dictionary<int, List<GameTask>> TasksByNode()
         {
@@ -651,35 +666,45 @@ namespace Apocalypse
             foreach (var kv in byNode)
             {
                 if (!piles.TryGetValue(kv.Key, out var pile)) piles[kv.Key] = pile = new Pile();
-                var list = kv.Value;
-                while (pile.items.Count < list.Count) pile.items.Add(Solid(PrimitiveType.Cube, dynRoot, Color.white, Vector3.one));
+                var goods = kv.Value.Where(t => t.type != TaskType.Rescue).ToList();
+                var people = kv.Value.Where(t => t.type == TaskType.Rescue).ToList();
+
+                // 平民：站在另一個角落，沿著畫面的水平方向排，一排三個，才不會從鏡頭看起來疊成一串
+                while (pile.civilians.Count < people.Count) pile.civilians.Add(MiniCapy(dynRoot, RescueColor));
+                var (side, crowdDir) = Sides(kv.Key);
+                var screenRight = new Vector2(cam.transform.right.x, cam.transform.right.z).normalized;
+                var screenUp = new Vector2(cam.transform.forward.x, cam.transform.forward.z).normalized;
+                var back = Perp(side);
+                for (int i = 0; i < pile.civilians.Count; i++)
+                {
+                    var cv = pile.civilians[i];
+                    bool on = i < people.Count;
+                    cv.SetActive(on);
+                    if (!on) continue;
+                    bool announced = people[i].status == TaskStatus.Announced;
+                    Vector2 p = CrowdBase(kv.Key) + screenRight * ((i % 3) - 1f) * 0.45f + screenUp * (i / 3) * 0.45f;
+                    cv.transform.position = W(p, Mathf.Abs(Mathf.Sin(time * 5f + i)) * 0.06f);
+                    cv.transform.rotation = Quaternion.Euler(0, 225f + Mathf.Sin(time * 2f + i) * 20f, Mathf.Sin(time * 5f + i) * 6f);
+                    cv.transform.localScale = Vector3.one * (announced ? 0.75f : 1.05f);
+                }
+
+                // 貨物：3×3 一層，最多兩層，多出來的不畫（不會疊太高）
+                int shown = Mathf.Min(goods.Count, PileCols * PileRows * PileLayers);
+                while (pile.items.Count < shown) pile.items.Add(Solid(PrimitiveType.Cube, dynRoot, Color.white, Vector3.one));
                 for (int i = 0; i < pile.items.Count; i++)
                 {
                     var go = pile.items[i];
-                    bool on = i < list.Count;
+                    bool on = i < shown;
                     go.SetActive(on);
-                    while (pile.civilians.Count <= i) pile.civilians.Add(null);
-                    if (pile.civilians[i] != null) pile.civilians[i].SetActive(false);
                     if (!on) continue;
-                    var task = list[i];
+                    var task = goods[i];
                     bool announced = task.status == TaskStatus.Announced;
 
-                    int col = i % 3, layer = i / 3;
-                    Vector2 p = PileBase(kv.Key) + new Vector2(col * 0.55f, 0);
+                    int layer = i / (PileCols * PileRows), j = i % (PileCols * PileRows);
+                    Vector2 p = PileBase(kv.Key) + side * (j / PileCols) * 0.5f + back * ((j % PileCols) - 1f) * 0.5f;
                     float s = announced ? 0.32f : 0.45f;
                     float bob = task.urgent && !announced ? 0.12f * Mathf.Sin(time * 6f) : 0f;
-                    go.transform.position = W(p, s / 2f + layer * 0.5f + bob);
-                    if (task.type == TaskType.Rescue)
-                    {
-                        if (pile.civilians[i] == null) pile.civilians[i] = MiniCapy(dynRoot, RescueColor);
-                        var cv = pile.civilians[i];
-                        go.SetActive(false);
-                        cv.SetActive(true);
-                        cv.transform.position = W(p, layer * 0.5f + bob + Mathf.Abs(Mathf.Sin(time * 5f + i)) * 0.06f);
-                        cv.transform.rotation = Quaternion.Euler(0, 225f + Mathf.Sin(time * 2f + i) * 20f, Mathf.Sin(time * 5f + i) * 6f);
-                        cv.transform.localScale = Vector3.one * (announced ? 0.75f : 1.05f);
-                        continue;
-                    }
+                    go.transform.position = W(p, s / 2f + layer * 0.47f + bob);
                     go.transform.localScale = task.type == TaskType.Rescue ? new Vector3(0.3f, s * 0.8f, 0.3f)
                         : task.type == TaskType.Fuel ? new Vector3(0.4f, 0.65f, 0.4f) : Vector3.one * s;
                     var batch = Sim.BatchOf(task);

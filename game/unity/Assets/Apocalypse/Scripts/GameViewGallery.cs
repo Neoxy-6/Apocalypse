@@ -59,7 +59,7 @@ namespace Apocalypse
             var z = Sim.zombies.FirstOrDefault();
             if (z != null) yield return Shot("zombie", Shown(z), 1.8f);
             var civ = Sim.tasks.FirstOrDefault(t => t.type == TaskType.Rescue && t.status == TaskStatus.Open);
-            if (civ != null) yield return Shot("civilian", PileBase(civ.origin) + new Vector2(0.5f, 0), 2f);
+            if (civ != null) yield return Shot("civilian", CrowdBase(civ.origin), 2f);
             var part = Sim.tasks.FirstOrDefault(t => t.type == TaskType.Part && t.status == TaskStatus.Open);
             if (part != null) yield return Shot("parts", PileBase(part.origin) + new Vector2(0.5f, 0), 2f);
             var fuelNode = Empty();
@@ -139,6 +139,30 @@ namespace Apocalypse
                 yield return new WaitForSecondsRealtime(0.8f);
                 GameManager.CaptureTo(Path.Combine(dir, "outcome_blessing_b.png"));
                 yield return new WaitForSecondsRealtime(2f);
+
+                // 檢查畫面：工廠前一大堆零件、同一個路口有平民也有零件、拿步槍開槍
+                var fac = map.nodes.First(n => n.type == NodeType.Factory);
+                var road = Empty();
+                for (int i = 0; i < 30; i++)
+                    Sim.tasks.Add(new GameTask { id = 90000 + i, type = TaskType.Part, origin = fac.id, dest = Sim.extraction, weight = 2, reward = 50, availableAt = 0, expiresAt = -1, status = TaskStatus.Open });
+                for (int i = 0; i < 7; i++)
+                    Sim.tasks.Add(new GameTask { id = 91000 + i, type = i < 3 ? TaskType.Rescue : TaskType.Part, origin = road.id, dest = Sim.extraction, weight = 2, reward = 50, availableAt = 0, expiresAt = -1, status = TaskStatus.Open });
+                galleryTarget = FacilityPos(fac.id); gallerySize = 4.5f;
+                yield return new WaitForSecondsRealtime(1.2f);
+                GameManager.CaptureTo(Path.Combine(dir, "check_pile.png"));
+                galleryTarget = map.nodes[road.id].pos; gallerySize = 3.5f;
+                yield return new WaitForSecondsRealtime(1.2f);
+                GameManager.CaptureTo(Path.Combine(dir, "check_crowd.png"));
+                if (Sim.players.Count > 0)
+                {
+                    var shooter = Sim.players[0];
+                    shooter.state = PlayerState.Active; shooter.ammo = 20;
+                    galleryTarget = shooter.pos + new Vector2(1.2f, 0); gallerySize = 2.6f;
+                    yield return new WaitForSecondsRealtime(1.2f);
+                    Sim.playerShots.Add((shooter.pos, shooter.pos + new Vector2(2.6f, 0.4f), Sim.time));
+                    yield return new WaitForSecondsRealtime(0.08f);
+                    GameManager.CaptureTo(Path.Combine(dir, "check_rifle.png"));
+                }
             }
             yield return new WaitForSecondsRealtime(0.5f);
             Application.Quit();
