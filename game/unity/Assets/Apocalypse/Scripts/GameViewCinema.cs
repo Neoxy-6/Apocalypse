@@ -37,6 +37,20 @@ namespace Apocalypse
             lastCut = Time.unscaledTime;
         }
         float manualZoom = 0.37f;
+        float lastRestartPress = -9f;
+
+        // 鏡頭跳到地圖矩形的九宮格其中一格：dx −1 左、0 中、1 右；dy 1 上、0 中、−1 下
+        // 方位照地圖本身（x 小是左、y 大是上，跟地圖編輯器一樣），不管鏡頭轉到哪
+        void ZoomPreset(int dx, int dy)
+        {
+            var nodes = Sim.map.nodes;
+            if (nodes.Count == 0) return;
+            float xmin = nodes.Min(n => n.pos.x), xmax = nodes.Max(n => n.pos.x);
+            float ymin = nodes.Min(n => n.pos.y), ymax = nodes.Max(n => n.pos.y);
+            manualTarget = new Vector2(Mathf.Lerp(xmin, xmax, 0.5f + dx / 3f), Mathf.Lerp(ymin, ymax, 0.5f + dy / 3f));
+            manualZoom = dx == 0 && dy == 0 ? 0.55f : 0.45f;
+            follow = -1; focusIncident = -1; userZoom = null;
+        }
         Vector3 lastMouse;
 
         void PanCamera()

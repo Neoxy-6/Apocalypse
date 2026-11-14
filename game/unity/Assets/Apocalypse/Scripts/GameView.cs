@@ -933,21 +933,41 @@ namespace Apocalypse
                     follow = i + 1 < alive.Count ? alive[i + 1] : -1;
                     manualTarget = null;
                     break;
-                case KeyCode.LeftArrow: CycleStudent(-1); break;
-                case KeyCode.RightArrow: CycleStudent(1); break;
-                case KeyCode.UpArrow: CycleIncident(-1); break;
-                case KeyCode.DownArrow: CycleIncident(1); break;
+                case KeyCode.UpArrow: CycleStudent(-1); break;
+                case KeyCode.DownArrow: CycleStudent(1); break;
+                case KeyCode.LeftArrow: CycleIncident(-1); break;
+                case KeyCode.RightArrow: CycleIncident(1); break;
                 case KeyCode.H: clean = !clean; break;
                 case KeyCode.F11:
                     if (Screen.fullScreen) Screen.SetResolution(1600, 900, FullScreenMode.Windowed);
                     else Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, FullScreenMode.FullScreenWindow);
                     break;
-                case KeyCode.Alpha0: case KeyCode.Escape: follow = -1; userZoom = null; manualTarget = null; focusIncident = -1; break;
+                case KeyCode.Alpha0: case KeyCode.Keypad0: case KeyCode.Escape: follow = -1; userZoom = null; manualTarget = null; focusIncident = -1; break;
                 case KeyCode.P: gm.speed = gm.speed == 0 ? 1 : 0; break;
-                case KeyCode.Alpha1: gm.speed = 1; break;
-                case KeyCode.Alpha2: gm.speed = 2; break;
-                case KeyCode.Alpha3: gm.speed = 4; break;
-                case KeyCode.Alpha4: gm.speed = 8; break;
+                case KeyCode.Z: gm.speed = 1; break;
+                case KeyCode.X: gm.speed = 2; break;
+                case KeyCode.C: gm.speed = 4; break;
+                case KeyCode.V: gm.speed = 8; break;
+                // 數字鍵跟數字鍵盤的位置一樣：7 8 9 是地圖上排、4 5 6 中排、1 2 3 下排
+                case KeyCode.Alpha1: case KeyCode.Keypad1: ZoomPreset(-1, -1); break;
+                case KeyCode.Alpha2: case KeyCode.Keypad2: ZoomPreset(0, -1); break;
+                case KeyCode.Alpha3: case KeyCode.Keypad3: ZoomPreset(1, -1); break;
+                case KeyCode.Alpha4: case KeyCode.Keypad4: ZoomPreset(-1, 0); break;
+                case KeyCode.Alpha5: case KeyCode.Keypad5: ZoomPreset(0, 0); break;
+                case KeyCode.Alpha6: case KeyCode.Keypad6: ZoomPreset(1, 0); break;
+                case KeyCode.Alpha7: case KeyCode.Keypad7: ZoomPreset(-1, 1); break;
+                case KeyCode.Alpha8: case KeyCode.Keypad8: ZoomPreset(0, 1); break;
+                case KeyCode.Alpha9: case KeyCode.Keypad9: ZoomPreset(1, 1); break;
+                case KeyCode.R:
+                    // 連按兩下回準備畫面，避免誤觸把進行中的比賽洗掉
+                    if (Sim.status == MatchStatus.Lobby) break;
+                    if (Time.unscaledTime - lastRestartPress < 1.5f)
+                    {
+                        lastRestartPress = -9f; follow = -1;
+                        gm.ResetMatch();
+                    }
+                    else lastRestartPress = Time.unscaledTime;
+                    break;
                 default: return;
             }
             e.Use();
@@ -1346,7 +1366,7 @@ namespace Apocalypse
         void Help(float W, float H)
         {
             GUI.Label(new Rect(W - 760, H - 34, 744, 24),
-                "<color=#777>Space 開始／結束後回準備畫面　WASD／拖曳 移動鏡頭　←→ 看學員　↑↓ 看事件　滾輪 縮放　0 全景　1-4 速度　P 暫停　H 乾淨轉播模式　F11 全螢幕</color>",
+                "<color=#777>Space 開始／結束後回準備畫面　WASD／拖曳 移動鏡頭　↑↓ 看學員　←→ 看事件　滾輪 縮放　1-9 看地圖九宮格（跟數字鍵盤同位置）　0 全景　Z X C V 速度 ×1 ×2 ×4 ×8　P 暫停　R 連按兩下回準備畫面　H 乾淨轉播模式　F11 全螢幕</color>",
                 new GUIStyle(small) { alignment = TextAnchor.MiddleRight });
         }
 

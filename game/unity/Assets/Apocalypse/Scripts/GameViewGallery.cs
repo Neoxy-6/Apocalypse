@@ -163,6 +163,14 @@ namespace Apocalypse
                     yield return new WaitForSecondsRealtime(0.08f);
                     GameManager.CaptureTo(Path.Combine(dir, "check_rifle.png"));
                 }
+                // 檢查 5–9 鍵的鏡頭位置
+                galleryTarget = null;
+                foreach (var (dx, dy, nm) in new[] { (-1, 1, "7"), (0, 1, "8"), (1, 1, "9"), (-1, 0, "4"), (0, 0, "5"), (1, 0, "6"), (-1, -1, "1"), (0, -1, "2"), (1, -1, "3") })
+                {
+                    ZoomPreset(dx, dy);
+                    yield return new WaitForSecondsRealtime(1.5f);
+                    GameManager.CaptureTo(Path.Combine(dir, $"check_zoom_{nm}.png"));
+                }
             }
             yield return new WaitForSecondsRealtime(0.5f);
             Application.Quit();
