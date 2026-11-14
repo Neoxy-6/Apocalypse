@@ -108,7 +108,7 @@ namespace Apocalypse
             string tag = fuelPhase ? $"油桶 {Mathf.Min(Sim.fuel, Sim.fuelRequired)}/{Sim.fuelRequired}"
                        : $"零件 {Mathf.Min(Sim.parts, Sim.partsRequired)}/{Sim.partsRequired}";
             float tw = wcTag.CalcSize(new GUIContent(tag)).x + 36;
-            var tagR = new Rect(bar.x + 26, bar.yMax + 8, tw, 32);
+            var tagR = new Rect(bar.x, bar.yMax + 18, tw, 32);
             Pill(tagR, WcBeige);
             GUI.Label(tagR, $"<color=#3a3233>{tag}</color>", wcTag);
             if (fuelPhase)
