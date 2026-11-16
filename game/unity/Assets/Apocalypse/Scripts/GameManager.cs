@@ -37,6 +37,7 @@ namespace Apocalypse
             sim = new GameSim(cfg);
             server = new ApiServer();
             server.Start(cfg.port);
+            gameObject.AddComponent<GameStream>();
 
             var argv = System.Environment.GetCommandLineArgs();
             bool wantsShots = argv.Contains("-capture") || argv.Contains("-captureEvery") || argv.Contains("-gallery") || argv.Contains("-record");

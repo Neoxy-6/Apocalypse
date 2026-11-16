@@ -95,6 +95,7 @@ namespace Apocalypse
         public bool autoStart = false;
         public int autoStartPlayers = 1;
         public bool allowLateJoin = true;
+        public int streamFps = 60, streamWidth = 1920, streamQuality = 90;   // 轉播網頁（/watch）：固定 16:9，寬度 streamWidth，跟遊戲視窗大小無關
 
         public float autoLoopDelay = 0f;
         public int[] practiceSeeds = new int[0];
@@ -157,6 +158,9 @@ namespace Apocalypse
                     case "-greedybots": int.TryParse(v, out cfg.greedyBots); break;
                     case "-squad": int.TryParse(v, out cfg.squadSize); break;
                     case "-autoloop": float.TryParse(v, out cfg.autoLoopDelay); break;
+                    case "-streamfps": int.TryParse(v, out cfg.streamFps); break;
+                    case "-streamwidth": int.TryParse(v, out cfg.streamWidth); break;
+                    case "-streamquality": int.TryParse(v, out cfg.streamQuality); break;
                     case "-latejoin": cfg.allowLateJoin = v != "0"; break;
                     case "-coop": cfg.coop = v != "0"; break;
                     case "-escape": cfg.escape = v != "0"; break;

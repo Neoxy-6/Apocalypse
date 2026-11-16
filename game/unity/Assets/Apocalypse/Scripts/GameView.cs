@@ -51,6 +51,7 @@ namespace Apocalypse
         Sprite circle, soft, square, ringSprite;
         Material lineMat;
         Transform mapRoot, dynRoot;
+        GameStream stream;
         int builtVersion = -1;
 
         readonly Dictionary<int, SpriteRenderer> heat = new Dictionary<int, SpriteRenderer>();
@@ -97,6 +98,7 @@ namespace Apocalypse
             LoadSavedUrl();
             cam.gameObject.AddComponent<BloomFx>();
             InitQuality();
+            stream = gm.GetComponent<GameStream>();
 
             foreach (var l in FindObjectsByType<Light>()) l.enabled = false;
             var sun = new GameObject("Sun").AddComponent<Light>();
@@ -484,6 +486,7 @@ namespace Apocalypse
             UpdateBanners();
             AutoQuality();
             using (Perf.S("camera")) UpdateCamera();
+            if (stream != null && stream.Due) using (Perf.S("stream")) stream.RenderScene(cam);
         }
 
         void UpdatePlayers(float t)
@@ -890,9 +893,44 @@ namespace Apocalypse
             HandleInput(Event.current);
             if (Event.current.type == EventType.Layout) return;
 
-            float s = Screen.height / 1080f;
+            guiPixW = Screen.width; guiPixH = Screen.height;
+            DrawGui();
+            if (Event.current.type == EventType.Repaint && stream != null && stream.SceneReady) StreamGui();
+        }
+
+        // 介面畫在多大的畫面上：平常是遊戲視窗，畫轉播時是轉播的 16:9 畫面
+        int guiPixW, guiPixH;
+
+        // 把介面再畫一次到轉播畫面上，版面照 16:9 排，跟遊戲視窗大小無關
+        void StreamGui()
+        {
+            var rt = stream.Target;
+            var prevActive = RenderTexture.active;
+            var prevTarget = cam.targetTexture;
+            cam.targetTexture = rt;
+            cam.aspect = (float)rt.width / rt.height;
+            RenderTexture.active = rt;
+            GL.PushMatrix();
+            GL.LoadPixelMatrix(0, rt.width, rt.height, 0);
+            guiPixW = rt.width; guiPixH = rt.height;
+            try { DrawGui(); }
+            finally
+            {
+                GL.PopMatrix();
+                RenderTexture.active = prevActive;
+                cam.targetTexture = prevTarget;
+                cam.ResetAspect();
+                guiPixW = Screen.width; guiPixH = Screen.height;
+                GUI.matrix = Matrix4x4.identity;
+                stream.GuiDone();
+            }
+        }
+
+        void DrawGui()
+        {
+            float s = guiPixH / 1080f;
             GUI.matrix = Matrix4x4.Scale(new Vector3(s, s, 1));
-            float W = Screen.width / s, H = 1080f;
+            float W = guiPixW / s, H = 1080f;
 
             using (Perf.S("gui_labels")) WorldLabels(s);
             using (Perf.S("gui_hud"))
@@ -983,7 +1021,7 @@ namespace Apocalypse
         Vector2 ToGui(Vector2 world, float s, float height = 0f)
         {
             var sp = cam.WorldToScreenPoint(W(world, height));
-            return new Vector2(sp.x / s, (Screen.height - sp.y) / s);
+            return new Vector2(sp.x / s, (guiPixH - sp.y) / s);
         }
 
         // 路口標籤的文字每 0.2 秒算一次就好，每幀只更新位置（原本每幀重組上百個字串，慢電腦會一直回收記憶體而卡頓）
@@ -1036,7 +1074,7 @@ namespace Apocalypse
                 nodeLabelsAt = Time.unscaledTime; nodeLabelsClose = close; nodeLabelsClean = clean;
             }
             var style = CenterSmall();
-            float sw = Screen.width / s, sh = Screen.height / s;
+            float sw = guiPixW / s, sh = guiPixH / s;
             foreach (var lb in nodeLabels)
             {
                 var g = ToGui(lb.at, s, lb.lift);

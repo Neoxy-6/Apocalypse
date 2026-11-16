@@ -1,6 +1,9 @@
 {
   "port": 8080,
   "adminKey": "",
+  "streamFps": 60,
+  "streamWidth": 1920,
+  "streamQuality": 100,
   "mapCols": 12,
   "mapRows": 10,
   "bridges": 2,
