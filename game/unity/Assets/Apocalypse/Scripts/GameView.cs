@@ -96,6 +96,7 @@ namespace Apocalypse
             cam.allowHDR = false;
             LoadSavedUrl();
             cam.gameObject.AddComponent<BloomFx>();
+            InitQuality();
 
             foreach (var l in FindObjectsByType<Light>()) l.enabled = false;
             var sun = new GameObject("Sun").AddComponent<Light>();
@@ -177,12 +178,11 @@ namespace Apocalypse
             go.transform.SetParent(parent, false);
             go.transform.localScale = scale;
             var r = go.GetComponent<Renderer>();
-            r.sharedMaterial = PixelBase();
-            r.material.color = c;
+            r.sharedMaterial = LitMat(c);   // 同顏色共用一個材質，才能合併繪製
             return go;
         }
 
-        static void Paint(GameObject go, Color c) => go.GetComponent<Renderer>().material.color = c;
+        static void Paint(GameObject go, Color c) => go.GetComponent<Renderer>().sharedMaterial = LitMat(c);
 
         public static Vector3 W(Vector2 v, float h = 0f) => new Vector3(v.x, h, v.y);
 
@@ -242,6 +242,8 @@ namespace Apocalypse
             BuildDistricts();
             BuildEscape();
             CollectOccluders();
+            // 街區的房子、樹不會動，合併成大網格，繪製次數少很多（慢電腦主要卡在這）
+            StaticBatchingUtility.Combine(decorStatic.gameObject);
             builtVersion = Sim.mapVersion;
         }
 
@@ -454,8 +456,9 @@ namespace Apocalypse
             if (Sim.mapVersion != builtVersion) BuildMap();
             var map = Sim.map;
             float t = Time.unscaledTime;
-            AnimateDecor(t);
+            using (Perf.S("decor")) AnimateDecor(t);
 
+            using (Perf.S("colors")) {
             foreach (var n in map.nodes)
             {
                 var c = InfectionColor; c.a = n.infection * 0.24f;
@@ -463,22 +466,24 @@ namespace Apocalypse
             }
             foreach (var kv in supplyViews)
                 if (kv.Value.sharedMaterial != null && kv.Value.sharedMaterial.shader.name != "Hidden/ApocalypseGhost")
-                    kv.Value.material.color = map.nodes[kv.Key].medkits > 0 ? new Color(1.0f, 0.84f, 0.31f) : new Color(0.45f, 0.40f, 0.25f);
+                    kv.Value.sharedMaterial = LitMat(map.nodes[kv.Key].medkits > 0 ? new Color(1.0f, 0.84f, 0.31f) : new Color(0.45f, 0.40f, 0.25f));
             foreach (var e in map.edges)
             {
                 var c = e.blocked ? BlockedColor : e.bridge ? BridgeColor : RoadColor;
                 roads[e.id].startColor = roads[e.id].endColor = c;
             }
+            }
 
-            UpdateSpread(Time.unscaledDeltaTime);
-            UpdatePlayers(t);
-            UpdateZombies();
-            UpdateOcclusion();
-            UpdateTasks(t);
+            using (Perf.S("spread")) UpdateSpread(Time.unscaledDeltaTime);
+            using (Perf.S("players")) UpdatePlayers(t);
+            using (Perf.S("zombies")) UpdateZombies();
+            using (Perf.S("occlusion")) UpdateOcclusion();
+            using (Perf.S("tasks")) UpdateTasks(t);
             if (Sim.status == MatchStatus.Ended) { if (endedAt < 0) endedAt = t; } else endedAt = -1f;
-            UpdateEscape(t);
+            using (Perf.S("escape")) UpdateEscape(t);
             UpdateBanners();
-            UpdateCamera();
+            AutoQuality();
+            using (Perf.S("camera")) UpdateCamera();
         }
 
         void UpdatePlayers(float t)
@@ -889,7 +894,8 @@ namespace Apocalypse
             GUI.matrix = Matrix4x4.Scale(new Vector3(s, s, 1));
             float W = Screen.width / s, H = 1080f;
 
-            WorldLabels(s);
+            using (Perf.S("gui_labels")) WorldLabels(s);
+            using (Perf.S("gui_hud"))
             if (gm.cfg.escape)
             {
                 if (Sim.status == MatchStatus.Lobby && gm.countdownStart < 0) LobbyMinimal(W, H);
@@ -897,7 +903,7 @@ namespace Apocalypse
             }
             else { TopBar(W); Leaderboard(W); }
             if (Sim.status != MatchStatus.Ended) DrawBanners(W);
-            if (!(gm.cfg.escape && Sim.status == MatchStatus.Lobby)) EventLog(W, H);
+            using (Perf.S("gui_log")) if (!(gm.cfg.escape && Sim.status == MatchStatus.Lobby)) EventLog(W, H);
             if (!clean && Sim.status == MatchStatus.Ended) Help(W, H);
             if (Sim.status == MatchStatus.Lobby && !gm.cfg.escape) LobbyPanel(W, H);
             Countdown(W, H);
@@ -938,6 +944,7 @@ namespace Apocalypse
                 case KeyCode.LeftArrow: CycleIncident(-1); break;
                 case KeyCode.RightArrow: CycleIncident(1); break;
                 case KeyCode.H: clean = !clean; break;
+                case KeyCode.L: SetLowFx(!lowFx, true); break;
                 case KeyCode.F11:
                     if (Screen.fullScreen) Screen.SetResolution(1600, 900, FullScreenMode.Windowed);
                     else Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, FullScreenMode.FullScreenWindow);
@@ -979,16 +986,21 @@ namespace Apocalypse
             return new Vector2(sp.x / s, (Screen.height - sp.y) / s);
         }
 
-        void WorldLabels(float s)
+        // 路口標籤的文字每 0.2 秒算一次就好，每幀只更新位置（原本每幀重組上百個字串，慢電腦會一直回收記憶體而卡頓）
+        struct NodeLabel { public int node; public string[] lines; public float w, h; public bool box; public Vector2 at; public float lift; }
+        readonly List<NodeLabel> nodeLabels = new List<NodeLabel>();
+        float nodeLabelsAt = -1f; bool nodeLabelsClose; bool nodeLabelsClean;
+
+        void RefreshNodeLabels(bool close)
         {
             var map = Sim.map;
-            bool close = cam.orthographicSize < 0.52f * overviewSize;
-
+            nodeLabels.Clear();
             var byNode = TasksByNode();
             var style = CenterSmall();
+            var lines = new List<string>();
             foreach (var n in map.nodes)
             {
-                var lines = new List<string>();
+                lines.Clear();
                 switch (n.type)
                 {
                     case NodeType.Shelter: lines.Add($"<b>{(n.id == map.startNode ? "總部避難所" : "避難所")}</b>"); break;
@@ -1005,14 +1017,34 @@ namespace Apocalypse
                 if (!clean && close) lines.Add($"<color=#666>#{n.id}</color>");
                 if (lines.Count == 0) continue;
 
-                float h = n.type == NodeType.Road ? 1.0f : 2.4f;
-                var g = ToGui(n.type == NodeType.Road ? n.pos : FacilityPos(n.id), s, h);
-                float cw = lines.Max(l => style.CalcSize(new GUIContent(l)).x) + 12, ch = 18 * lines.Count + 4;
-                var card = new Rect(g.x - cw / 2f, g.y - ch, cw, ch);
-                bool onlyId = lines.Count == 1 && lines[0].StartsWith("<color=#666>");
-                if (!onlyId) Box(card, new Color(0.02f, 0.03f, 0.06f, 0.4f));
-                for (int i = 0; i < lines.Count; i++)
-                    GUI.Label(new Rect(card.x, card.y + 2 + 18 * i, cw, 18), $"<color=#eee>{lines[i]}</color>", style);
+                float cw = lines.Max(l => style.CalcSize(new GUIContent(l)).x) + 12;
+                nodeLabels.Add(new NodeLabel
+                {
+                    node = n.id, lines = lines.Select(l => $"<color=#eee>{l}</color>").ToArray(), w = cw, h = 18 * lines.Count + 4,
+                    box = !(lines.Count == 1 && lines[0].StartsWith("<color=#666>")),
+                    at = n.type == NodeType.Road ? n.pos : FacilityPos(n.id), lift = n.type == NodeType.Road ? 1.0f : 2.4f,
+                });
+            }
+        }
+
+        void WorldLabels(float s)
+        {
+            bool close = cam.orthographicSize < 0.52f * overviewSize;
+            if (Time.unscaledTime - nodeLabelsAt > 0.2f || close != nodeLabelsClose || clean != nodeLabelsClean)
+            {
+                RefreshNodeLabels(close);
+                nodeLabelsAt = Time.unscaledTime; nodeLabelsClose = close; nodeLabelsClean = clean;
+            }
+            var style = CenterSmall();
+            float sw = Screen.width / s, sh = Screen.height / s;
+            foreach (var lb in nodeLabels)
+            {
+                var g = ToGui(lb.at, s, lb.lift);
+                if (g.x < -lb.w || g.x > sw + lb.w || g.y < 0 || g.y > sh + lb.h) continue;
+                var card = new Rect(g.x - lb.w / 2f, g.y - lb.h, lb.w, lb.h);
+                if (lb.box) Box(card, new Color(0.02f, 0.03f, 0.06f, 0.4f));
+                for (int i = 0; i < lb.lines.Length; i++)
+                    GUI.Label(new Rect(card.x, card.y + 2 + 18 * i, lb.w, 18), lb.lines[i], style);
             }
 
             foreach (var inc in Sim.incidents)
@@ -1366,7 +1398,7 @@ namespace Apocalypse
         void Help(float W, float H)
         {
             GUI.Label(new Rect(W - 760, H - 34, 744, 24),
-                "<color=#777>Space 開始／結束後回準備畫面　WASD／拖曳 移動鏡頭　↑↓ 看學員　←→ 看事件　滾輪 縮放　1-9 看地圖九宮格（跟數字鍵盤同位置）　0 全景　Z X C V 速度 ×1 ×2 ×4 ×8　P 暫停　R 連按兩下回準備畫面　H 乾淨轉播模式　F11 全螢幕</color>",
+                "<color=#777>Space 開始／結束後回準備畫面　WASD／拖曳 移動鏡頭　↑↓ 看學員　←→ 看事件　滾輪 縮放　1-9 看地圖九宮格（跟數字鍵盤同位置）　0 全景　Z X C V 速度 ×1 ×2 ×4 ×8　P 暫停　R 連按兩下回準備畫面　H 乾淨轉播模式　L 流暢模式　F11 全螢幕</color>",
                 new GUIStyle(small) { alignment = TextAnchor.MiddleRight });
         }
 
