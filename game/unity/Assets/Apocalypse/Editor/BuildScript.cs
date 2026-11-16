@@ -47,6 +47,7 @@ namespace Apocalypse.EditorTools
         {
             EnsureScene();
             PlayerSettings.runInBackground = true;
+            PlayerSettings.enableFrameTimingStats = true;
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
             PlayerSettings.defaultScreenWidth = 1920;
             PlayerSettings.defaultScreenHeight = 1080;

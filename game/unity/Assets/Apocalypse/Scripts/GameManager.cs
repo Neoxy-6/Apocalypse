@@ -148,7 +148,8 @@ namespace Apocalypse
 
         void Update()
         {
-            server.Pump(Handle);
+            Perf.Frame();
+            using (Perf.S("server")) server.Pump(Handle);
 
             if (sim.status == MatchStatus.Lobby && cfg.autoStart && sim.teams.Count(t => !t.IsBot) >= Mathf.Max(1, cfg.autoStartPlayers))
                 StartMatch();
@@ -171,9 +172,9 @@ namespace Apocalypse
 
             float dt = Mathf.Min(Time.unscaledDeltaTime, 0.1f) * cfg.timeScale * speed;
             int steps = Mathf.CeilToInt(dt / 0.05f);
-            for (int i = 0; i < steps; i++) sim.Tick(dt / steps);
+            using (Perf.S("sim")) for (int i = 0; i < steps; i++) sim.Tick(dt / steps);
 
-            RecordReplay();
+            using (Perf.S("replay")) RecordReplay();
             CaptureTick();
             if (captureAt > 0 && Time.unscaledTime >= captureAt)
             {
