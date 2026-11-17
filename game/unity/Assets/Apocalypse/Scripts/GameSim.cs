@@ -1797,7 +1797,7 @@ namespace Apocalypse
                 t.expiresAt = t.type == TaskType.Fuel ? -1f : time + 60f;
             }
             p.cargo.Clear();
-            Log("eliminated", $"{p.name} 倒下了（{reason}），沒能逃出", p.node);
+            Log("eliminated", $"{p.name} 倒下了（{reason}）", p.node);
         }
 
         int RespawnNode()

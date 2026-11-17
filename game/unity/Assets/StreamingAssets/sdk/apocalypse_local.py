@@ -2139,11 +2139,11 @@ class Sim:
             if b.owner == p.team:
                 b.owner, b.failed = -1, True
         if self.cfg["escape"]:
-            self.log("eliminated", f"{p.name} 倒下了（{reason}），沒能逃出", p.node)
+            self.log("eliminated", f"{p.name} 倒下了（{reason}）", p.node)
             return
         self.spawn_zombie(p.node, p.id)
         self.city_infection += 4
-        self.log("eliminated", f"{p.name} 倒下了（{reason}），化為殭屍，沒能逃出", p.node)
+        self.log("eliminated", f"{p.name} 倒下了（{reason}），化為殭屍", p.node)
 
     def _update_zombie(self, z, dt):
         if z.next_node >= 0:
