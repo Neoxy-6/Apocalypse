@@ -188,6 +188,33 @@ namespace Apocalypse
 
         public static Vector3 W(Vector2 v, float h = 0f) => new Vector3(v.x, h, v.y);
 
+        // 折線裁到矩形內，留最長的一段連續部分
+        static List<Vector2> ClipToRect(List<Vector2> line, Vector2 lo, Vector2 hi)
+        {
+            var best = new List<Vector2>(); var cur = new List<Vector2>();
+            for (int i = 0; i + 1 < line.Count; i++)
+            {
+                Vector2 a = line[i], d = line[i + 1] - a;
+                float t0 = 0f, t1 = 1f;
+                bool Clip(float p, float q)
+                {
+                    if (Mathf.Abs(p) < 1e-6f) return q >= 0f;
+                    float r = q / p;
+                    if (p < 0f) { if (r > t1) return false; if (r > t0) t0 = r; }
+                    else { if (r < t0) return false; if (r < t1) t1 = r; }
+                    return true;
+                }
+                bool inside = Clip(-d.x, a.x - lo.x) && Clip(d.x, hi.x - a.x) && Clip(-d.y, a.y - lo.y) && Clip(d.y, hi.y - a.y);
+                if (!inside) { if (cur.Count > best.Count) best = cur; cur = new List<Vector2>(); continue; }
+                var s = a + d * t0; var e = a + d * t1;
+                if (cur.Count == 0 || (cur[cur.Count - 1] - s).sqrMagnitude > 1e-6f) { if (cur.Count > 0) { if (cur.Count > best.Count) best = cur; cur = new List<Vector2>(); } cur.Add(s); }
+                cur.Add(e);
+                if (t1 < 1f) { if (cur.Count > best.Count) best = cur; cur = new List<Vector2>(); }
+            }
+            if (cur.Count > best.Count) best = cur;
+            return best.Count >= 2 ? best : line;
+        }
+
         void BuildMap()
         {
             if (mapRoot) Destroy(mapRoot.gameObject);
@@ -199,7 +226,8 @@ namespace Apocalypse
             var map = Sim.map;
             Vector2 size = map.Size;
 
-            riverLine = map.RiverLine();
+            // 河畫到地圖邊框為止（自訂地圖的河常常拉到邊框外面）
+            riverLine = ClipToRect(map.RiverLine(), new Vector2(-3f, -3f), size + new Vector2(3f, 3f));
             BuildGround(map, size);
             BuildRiver(map, size);
             BuildRiverFx(map, size);

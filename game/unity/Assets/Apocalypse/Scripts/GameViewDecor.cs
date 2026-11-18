@@ -142,7 +142,9 @@ namespace Apocalypse
             var occupied = facilityPos.Values.ToList();
             if (gm.cfg.escape) occupied.Add(ShelterPos(map.nodes[Sim.extraction]));
 
-            bool Free(Vector2 p, float road, float fac) => RoadClearance(p) >= road && occupied.All(o => Vector2.Distance(o, p) >= fac);
+            // 河寬一半 1.3，東西至少要離河中線 1.9 才不會蓋到水上
+            bool Free(Vector2 p, float road, float fac) => RoadClearance(p) >= road && occupied.All(o => Vector2.Distance(o, p) >= fac)
+                                                           && (riverLine.Count < 2 || CityMap.RiverDistance(riverLine, p) >= 1.9f);
 
             void Block(Vector2 center, int theme, System.Random rnd)
             {
@@ -263,6 +265,7 @@ namespace Apocalypse
         void JungleBlock(Vector2 center, System.Random rnd, bool whole, System.Func<Vector2, float, float, bool> free)
         {
             double block = rnd.NextDouble();
+            if (riverLine.Count > 1 && CityMap.RiverDistance(riverLine, center) < 3.8f) whole = false;   // 神殿、水池太大，靠河就不放
             if (whole && block < 0.16) { Temple(center, rnd); return; }
             if (whole && block < 0.28) { Pond(center, rnd); }
             for (int i = 0; i < 9; i++)
@@ -590,7 +593,9 @@ namespace Apocalypse
 
         void TownBlock(Vector2 center, System.Random rnd, bool whole, System.Func<Vector2, float, float, bool> free)
         {
-            if (whole && rnd.NextDouble() < 0.38) { Farmland(center, rnd); return; }
+            // 一整塊田大約 3.4×3.0，中心要離河中線 3.8 以上才不會壓到河
+            bool dry = riverLine.Count < 2 || CityMap.RiverDistance(riverLine, center) >= 3.8f;
+            if (whole && dry && rnd.NextDouble() < 0.38) { Farmland(center, rnd); return; }
             for (int i = 0; i < 9; i++)
             {
                 var pos = center + new Vector2((i % 3 - 1) * 1.35f, (i / 3 - 1) * 1.35f) + new Vector2(F(rnd, -0.25f, 0.25f), F(rnd, -0.25f, 0.25f));
