@@ -468,12 +468,24 @@ def load_map(src):
     return json.load(open(src, encoding="utf-8"))
 
 def test_local(make_policy: Callable[[], Callable], seeds=(1, 2, 3), name: str = "我", role: str = "",
-               classmates: int = 11, show: bool = True, map=None) -> list:
+               classmates: int = 11, show: bool = True, map=None, opponents: str = "ai") -> list:
+    """在本機打幾場。opponents="ai"：同學是 11 種 OR-Tools AI bot（比較像真的比賽，一場要一兩分鐘）；
+    opponents="simple"：同學是簡單的 bot（幾秒鐘跑完）。"""
     from apocalypse_local import LocalGame
     map_data = load_map(map)
+    bots = None
+    if opponents == "ai" and classmates > 0:
+        try:
+            import apocalypse_bots as bots
+        except ImportError as e:
+            print(f"載入 AI 同學失敗（{e}），改用簡單的同學")
     games = []
     for seed in seeds:
-        g = LocalGame(seed=seed, name=name, role=role, classmates=classmates, map_data=map_data)
+        extra = {}
+        if bots:
+            kinds = [bots.BOTS[i % len(bots.BOTS)] for i in range(classmates)]
+            extra = dict(classmate_policies=[bots.make(k) for k in kinds], classmate_names=[bots.LABELS[k] for k in kinds], always_call=True)
+        g = LocalGame(seed=seed, name=name, role=role, classmates=classmates, map_data=map_data, **extra)
         try:
             g.run(make_policy())
         except Exception:
@@ -493,13 +505,11 @@ def test_local(make_policy: Callable[[], Callable], seeds=(1, 2, 3), name: str =
             mine = (f"壓低感染 {r['city_reduced']:.1f}%　配送 {r['delivered']}、救援 {r['rescued']}　倒地 {r['downs']} 次"
                     f"　{'撤離成功' if r['alive'] else '沒有撤離'}")
         print(f"種子 {seed}：{city}　｜　你 {r['score']:4d} 分（第 {r['rank']}/{r['players']} 名，同學平均 {r['class_avg']:.0f}）　{mine}")
-        if g.errors:
-            print(f"　　⚠ 有 {len(g.errors)} 個步驟被略過，例如：{g.errors[0]}")
     if len(games) > 1:
         rs = [g.result() for g in games]
         print(f"全班成功 {sum(r['class_won'] for r in rs)}/{len(rs)} 場；你平均 {sum(r['score'] for r in rs) / len(rs):.0f} 分")
     if show and games:
-        replay(games[-1])
+        replay(games)
     return games
 
 def play(make_policy: Callable[[], Callable], url: str, name: str, role: str = ""):
@@ -621,24 +631,36 @@ _REPLAY_HTML = """
 <button class="pp" style="width:60px;font-size:15px">⏸</button>
 <input class="sl" type="range" min="0" value="0" style="flex:1">
 <span class="tm" style="width:110px;text-align:right"></span>
+<select class="sd" style="display:none"></select>
 <select class="sp"><option value="1">1x</option><option value="2">2x</option><option value="4" selected>4x</option><option value="8">8x</option><option value="16">16x</option></select>
 </div>
 <div class="hd" style="margin-top:6px;font-size:14px"></div>
 </div>
 <script>
 (function(){
-const D = DATA, ME = MEID;
+const ALL = DATA;   // [{label, data, me}, ...]：好幾個種子時用下拉選單切換
 const root = document.getElementById("RID"), cv = root.querySelector("canvas"), cx = cv.getContext("2d");
-const H = D.header, F = D.frames, every = H.every, N = H.nodes;
-const xs = N.map(n => n[0]), ys = N.map(n => n[1]);
-const x0 = Math.min(...xs) - 1.5, x1 = Math.max(...xs) + 1.5, y0 = Math.min(...ys) - 1.5, y1 = Math.max(...ys) + 1.5;
-const sc = Math.min(760 / (x1 - x0), 520 / (y1 - y0));
-const ox = (760 - (x1 - x0) * sc) / 2, oy = (520 - (y1 - y0) * sc) / 2;
-const X = x => ox + (x - x0) * sc, Y = y => 520 - (oy + (y - y0) * sc);
-const sl = root.querySelector(".sl"), pp = root.querySelector(".pp"), sp = root.querySelector(".sp");
+const sl = root.querySelector(".sl"), pp = root.querySelector(".pp"), sp = root.querySelector(".sp"), sd = root.querySelector(".sd");
 const tm = root.querySelector(".tm"), hd = root.querySelector(".hd");
-sl.max = (F.length - 1) * 100;
+let ME, H, F, every, N, END, x0, x1, y0, y1, sc, ox, oy;
+const X = x => ox + (x - x0) * sc, Y = y => 520 - (oy + (y - y0) * sc);
 let T = 0, playing = true, last = null;
+function load(k) {
+  const D = ALL[k].data; ME = ALL[k].me;
+  H = D.header; F = D.frames; every = H.every; N = H.nodes;
+  END = F[F.length - 1].t;   // 比賽實際結束的時間（全員倒下或提早起飛時不到 10 分鐘）
+  const xs = N.map(n => n[0]), ys = N.map(n => n[1]);
+  x0 = Math.min(...xs) - 1.5; x1 = Math.max(...xs) + 1.5; y0 = Math.min(...ys) - 1.5; y1 = Math.max(...ys) + 1.5;
+  sc = Math.min(760 / (x1 - x0), 520 / (y1 - y0));
+  ox = (760 - (x1 - x0) * sc) / 2; oy = (520 - (y1 - y0) * sc) / 2;
+  sl.max = (F.length - 1) * 100; T = 0; sl.value = 0; playing = true; pp.textContent = "⏸";
+}
+if (ALL.length > 1) {
+  sd.style.display = "";
+  ALL.forEach((e, k) => { const o = document.createElement("option"); o.value = k; o.textContent = e.label; sd.appendChild(o); });
+  sd.onchange = () => load(+sd.value);
+}
+load(0);
 const FAC = {shelter: "#ffd54f", hospital: "#f06292", supply: "#ffeb3b", factory: "#a1887f", generator: "#26c6da"};
 const TASK = {p: "#ff9800", r: "#66bb6a", f: "#e53935", d: "#ff9800"};
 const clock = t => { t = Math.max(0, t); return Math.floor(t / 60) + ":" + String(Math.floor(t % 60)).padStart(2, "0"); };
@@ -677,19 +699,19 @@ function draw(fi) {
   });
   f.zb.forEach(z => { cx.fillStyle = z[2] ? "#ff5252" : "#7cb342"; cx.beginPath(); cx.arc(X(z[0]), Y(z[1]), 3, 0, 7); cx.fill(); });
   const nxt = {}; g.p.forEach(p => nxt[p[0]] = p);
-  let me = null;
+  const me = f.p.find(p => p[0] === ME) || null;   // 倒下、淘汰、撤離後也照樣顯示分數
   f.p.forEach(p => {
     if (p[3] === 2) return;
     const q = nxt[p[0]] || p, px = p[1] + (q[1] - p[1]) * a, py = p[2] + (q[2] - p[2]) * a;
     const info = H.players[p[0]] || ["?", "#fff"], mine = p[0] === ME;
-    if (mine) me = p;
     cx.fillStyle = p[3] === 1 ? "#777" : info[1];
     cx.beginPath(); cx.arc(X(px), Y(py), mine ? 8 : 5, 0, 7); cx.fill();
     if (mine) { cx.strokeStyle = "#fff"; cx.lineWidth = 2.5; cx.stroke(); cx.fillStyle = "#fff"; cx.font = "13px sans-serif"; cx.fillText(info[0], X(px) + 10, Y(py) - 8); }
   });
   const goal = f.depart >= 0 ? "起飛倒數 " + clock(f.depart - f.t) : f.ready >= 0 ? "油桶 " + f.fuel + "/" + f.freq : "零件 " + f.parts + "/" + f.preq;
-  hd.textContent = goal + (me ? "　｜　你：" + me[4] + " 分　生命 " + me[5] : "");
-  tm.textContent = clock(f.t) + " / " + clock(H.duration);
+  const st = !me ? "" : me[6] ? "　已搭上直升機" : me[3] === 2 ? "　無法行動" : me[3] === 1 ? "　倒地" : "";
+  hd.textContent = goal + (me ? "　｜　你：" + me[4] + " 分　生命 " + me[5] + st : "");
+  tm.textContent = clock(f.t) + " / " + clock(END);
 }
 function tick(now) {
   if (last !== null && playing) { T += (now - last) / 1000 / every * sp.value; if (T >= F.length - 1) { T = F.length - 1; playing = false; pp.textContent = "▶"; } sl.value = T * 100; }
@@ -704,23 +726,29 @@ requestAnimationFrame(tick);
 
 
 def replay(game, name: str | None = None):
+    """播放重播。game 可以是一場（LocalGame 或重播資料），也可以是好幾場的 list（例如 test_local 的結果），用下拉選單切換種子。"""
     import json, random
     from IPython.display import HTML, display
-    if isinstance(game, dict):
-        data = game
-    else:
-        data = game.replay_data()
-        name = name or game.me.name
-    if not data.get("frames"):
+    games = game if isinstance(game, (list, tuple)) else [game]
+    entries = []
+    for g in games:
+        if isinstance(g, dict):
+            data, who, label = g, name, f"種子 {g.get('header', {}).get('seed', '?')}"
+        else:
+            data, who, label = g.replay_data(), name or g.me.name, f"種子 {g.sim.cfg['seed']}"
+        if not data.get("frames"):
+            continue
+        players = data["header"]["players"]
+        me = next((int(k) for k, v in players.items() if who and v[0] == who), -1)
+        if who and me < 0:
+            print(f"重播裡找不到「{who}」，照樣播放（名字要和加入時一樣）")
+        entries.append(dict(label=label, data=data, me=me))
+    if not entries:
         print("沒有可以重播的畫面")
         return
-    players = data["header"]["players"]
-    me = next((int(k) for k, v in players.items() if name and v[0] == name), -1)
-    if name and me < 0:
-        print(f"重播裡找不到「{name}」，照樣播放（名字要和加入時一樣）")
     rid = "rp" + str(random.randrange(10 ** 9))
-    html = (_REPLAY_HTML.replace("RID", rid).replace("MEID", str(me))
-            .replace("DATA", json.dumps(data, ensure_ascii=False, separators=(",", ":"))))
+    html = (_REPLAY_HTML.replace("RID", rid)
+            .replace("DATA", json.dumps(entries, ensure_ascii=False, separators=(",", ":"))))
     display(HTML(html))
 
 

@@ -102,7 +102,7 @@ namespace Apocalypse
         {
             var sb = new System.Text.StringBuilder();
             sb.Append("{\"every\":").Append(F2(every)).Append(",\"extraction\":").Append(sim.extraction)
-              .Append(",\"duration\":").Append(F2(sim.cfg.matchDuration)).Append(",\"nodes\":[");
+              .Append(",\"duration\":").Append(F2(sim.cfg.matchDuration)).Append(",\"seed\":").Append(sim.cfg.seed).Append(",\"nodes\":[");
             for (int i = 0; i < sim.map.nodes.Count; i++)
             {
                 var n = sim.map.nodes[i];
@@ -139,7 +139,7 @@ namespace Apocalypse
                 if (!first) sb.Append(','); first = false;
                 int s = p.state == PlayerState.Active ? 0 : p.state == PlayerState.Downed ? 1 : 2;
                 sb.Append('[').Append(p.id).Append(',').Append(F2(p.pos.x)).Append(',').Append(F2(p.pos.y)).Append(',').Append(s)
-                  .Append(',').Append(p.score).Append(',').Append(Mathf.RoundToInt(p.hp)).Append(']');
+                  .Append(',').Append(p.score).Append(',').Append(Mathf.RoundToInt(p.hp)).Append(',').Append(p.escaped ? 1 : 0).Append(']');
             }
             sb.Append("],\"zb\":[");
             first = true;

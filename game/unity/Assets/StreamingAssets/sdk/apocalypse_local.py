@@ -2404,7 +2404,7 @@ class Sim:
 
     def replay_header(self, every):
         m = self.map
-        return dict(every=every, extraction=self.extraction, duration=self.cfg["matchDuration"],
+        return dict(every=every, extraction=self.extraction, duration=self.cfg["matchDuration"], seed=self.cfg["seed"],
                     nodes=[[round(n.pos[0], 2), round(n.pos[1], 2), n.type] for n in m.nodes],
                     edges=[[e.a, e.b, 1 if e.bridge else 0] for e in m.edges],
                     players={str(p.id): [p.name, p.color] for p in self.players})
@@ -2415,7 +2415,7 @@ class Sim:
         return dict(
             t=r2(self.time), z=r2(self.zone_radius), parts=self.parts, preq=self.parts_required, fuel=self.fuel,
             freq=self.fuel_required, ready=r2(self.ready_at), depart=r2(self.depart_at),
-            p=[[p.id, r2(p.pos[0]), r2(p.pos[1]), st.get(p.state, 0), p.score, round(p.hp)] for p in self.players],
+            p=[[p.id, r2(p.pos[0]), r2(p.pos[1]), st.get(p.state, 0), p.score, round(p.hp), 1 if p.escaped else 0] for p in self.players],
             zb=[[r2(z.pos[0]), r2(z.pos[1]), 1 if z.mode == "chase" else 0] for z in self.zombies],
             k=[[t.origin, t.type[0], 1 if t.status == "announced" else 0] for t in self.tasks if t.status in ("open", "announced")],
             i=[[i.node, i.kind] for i in self.incidents if i.status == "active"],
@@ -2542,14 +2542,17 @@ def classmate_policy():
 class LocalGame:
 
     def __init__(self, seed: int = 1, name: str = "我", frame_every: float = 3.0, classmates: int = 11,
-                 classmate_policies=None, role: str = "", **cfg):
+                 classmate_policies=None, role: str = "", classmate_names=None, always_call: bool = False, **cfg):
         self.sim = Sim(seed=seed, **cfg)
         self.me = self.sim.add_player(name)
         self.me.role = role
         self.agents = []
-        pols = classmate_policies or [classmate_policy() for _ in range(classmates)]
+        pols = classmate_policies if classmate_policies is not None else [classmate_policy() for _ in range(classmates)]
         for i, pol in enumerate(pols):
-            self.agents.append((self.sim.add_player(f"同學{i + 1}"), pol))
+            nm = classmate_names[i] if classmate_names and i < len(classmate_names) else f"同學{i + 1}"
+            self.agents.append((self.sim.add_player(nm), pol))
+        # AI bot 要每秒呼叫（移動中也要，才會補血、撤離）；簡單的同學只在閒著時呼叫
+        self.always_call = always_call
         self.frame_every = frame_every
         self.frames: list = []
         self.replay_every = 0.5
@@ -2586,7 +2589,7 @@ class LocalGame:
                     next_call[p.id] += interval
                     if p.state != "active":
                         continue
-                    if p is not self.me and not (p.plan_index >= len(p.plan) and p.pending is None and p.next_node < 0):
+                    if p is not self.me and not self.always_call and not (p.plan_index >= len(p.plan) and p.pending is None and p.next_node < 0):
                         continue
                     st = self.state(p)
                     t0 = _time.perf_counter()
