@@ -148,6 +148,9 @@ namespace Apocalypse
         void OnDestroy() => server?.Stop();
         void OnApplicationQuit() => server?.Stop();
 
+        // 這一幀的模擬跑完後，更新 /state 的快取
+        void LateUpdate() { using (Perf.S("statecache")) StateCache.Update(sim); }
+
         void Update()
         {
             Perf.Frame();

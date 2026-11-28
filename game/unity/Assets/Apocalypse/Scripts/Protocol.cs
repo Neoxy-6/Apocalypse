@@ -272,13 +272,15 @@ namespace Apocalypse
                 you = new YouDto(),
             };
 
-            if (viewer != null)
-            {
-                var you = new YouDto();
-                Fill(you, sim, viewer.units[0]);
-                s.you = you;
-            }
+            if (viewer != null) s.you = YouOf(sim, viewer);
             return s;
+        }
+
+        public static YouDto YouOf(GameSim sim, Team viewer)
+        {
+            var you = new YouDto();
+            Fill(you, sim, viewer.units[0]);
+            return you;
         }
 
         static UnitDto Fill(UnitDto d, GameSim sim, Player u)

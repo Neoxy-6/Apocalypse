@@ -194,8 +194,15 @@ stream();
                     body = body,
                 };
                 if (req.path == "") req.path = "/";
-                queue.Enqueue(req);
-                if (!req.done.Wait(5000)) { req.code = 503; req.response = "{\"ok\":false,\"error\":\"server busy\"}"; }
+                // /state 有快取就直接回，不用等主執行緒（見 StateCache）
+                string cacheWhy = null;
+                if (req.method == "GET" && req.path == "/state" && StateCache.TryServe(req.query["token"], out var cached, out cacheWhy))
+                    req.response = cached;
+                else
+                {
+                    queue.Enqueue(req);
+                    if (!req.done.Wait(5000)) { req.code = 503; req.response = "{\"ok\":false,\"error\":\"server busy\"}"; }
+                }
 
                 byte[] bytes = Encoding.UTF8.GetBytes(req.response);
                 // 狀態很大（幾十 KB），學員從 Colab 經過通道連進來時先壓縮，傳輸量少八成左右
@@ -209,6 +216,7 @@ stream();
                     }
                     res.AddHeader("Content-Encoding", "gzip");
                 }
+                if (cacheWhy != null) res.AddHeader("X-State-Cache", cacheWhy);
                 res.StatusCode = req.code;
                 res.ContentType = req.contentType;
                 res.ContentLength64 = bytes.Length;
@@ -226,7 +234,7 @@ stream();
         {
             while (queue.TryDequeue(out var req))
             {
-                try { handler(req); }
+                try { if (Perf.On) using (Perf.S("req " + req.method + " " + req.path)) handler(req); else handler(req); }
                 catch (Exception e)
                 {
                     req.code = 500;
