@@ -50,7 +50,7 @@ const stateName = {active:'存活', escaped:'逃出', evacuated:'撤離', elimin
 
 // 分數來源（伺服器 Pts），從來沒出現過的項目不顯示
 const PTS = [['pts_part', '零件'], ['pts_fuel', '油桶'], ['pts_incident', '事件'], ['pts_kill', '擊殺'], ['pts_rescue', '救援'], ['pts_revive', '扶起'],
-             ['pts_set', '套件獎金'], ['pts_delivery', '配送'], ['pts_escape', '逃出獎金'], ['pts_down', '倒地扣分']];
+             ['pts_set', '套件獎勵'], ['pts_delivery', '配送'], ['pts_escape', '逃出獎金'], ['pts_down', '倒地扣分']];
 const CNT = [['kills', '擊殺'], ['incidents', '事件'], ['revives', '扶起'], ['downs', '倒地']];
 let ptCols = PTS;
 
@@ -97,9 +97,8 @@ function render() {
   const all = players.flatMap(p => p.per.filter(x => x));
   ptCols = PTS.filter(([k]) => all.some(r => r[k]));
   if (!ptCols.length) ptCols = PTS.slice(0, 6);
-  $('sub').textContent = `每 3 秒自動更新 · 最後更新 ${new Date().toLocaleTimeString()}`;
   $('stats').innerHTML = [
-    [ms.length, '已打場數'],
+    [ms.length, '場數'],
     [players.length, roster.length ? '名單人數' : '參賽人數'],
     [`${ms.filter(m => m.class_won).length}/${ms.length}`, '勝場'],
     [all.filter(r => r.escaped).length, '逃出人數'],
@@ -122,7 +121,7 @@ function render() {
       const pt = (r, k) => r.noPts ? '<span class="zero">—</span>' : r[k] < 0 ? `<span class="neg">${r[k]}</span>` : r[k] > 0 ? `+${r[k]}` : n(0);
       const row = r => ptCols.map(([k]) => `<td>${pt(r, k)}</td>`).join('') + CNT.map(([k]) => `<td>${n(r[k] || 0)}</td>`).join('');
       h += `<tr class="detail"><td colspan="${cols}"><table class="dt"><thead>`
-        + `<tr><th class="grp" colspan="5">每場結果</th><th class="grp" colspan="${ptCols.length}">任務與戰鬥分數</th><th class="grp" colspan="${CNT.length}">次數</th></tr>`
+        + `<tr><th class="grp" colspan="5">每場結果</th><th class="grp" colspan="${ptCols.length}">分數</th><th class="grp" colspan="${CNT.length}">次數</th></tr>`
         + `<tr><th>場次</th><th>名次</th><th>分數</th><th>結果</th><th>存活秒數</th>` + ptCols.map(([, t]) => `<th>${t}</th>`).join('') + CNT.map(([, t]) => `<th>${t}</th>`).join('') + `</tr></thead><tbody>`
         + p.per.map((r, i) => r ? `<tr><td>第${i + 1}場</td><td>${r.rank}</td><td><b>${r.score}</b></td><td>${r.escaped ? '<span class="esc">逃出</span>' : esc(stateName[r.state] || r.state)}</td><td>${Math.round(r.survived)}</td>${row(r)}</tr>`
                                 : `<tr><td>第${i + 1}場</td><td colspan="${4 + ptCols.length + CNT.length}" class="none">沒參加</td></tr>`).join('')
