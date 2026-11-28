@@ -4,8 +4,7 @@
 <style>
 :root{--bg:#1d1b1c;--card:#262324;--line:#363132;--dim:#8f8788;--gold:#ffd166;--red:#e07a7a;--green:#7fc98f}
 body{margin:0;padding:16px;background:var(--bg);color:#eee;font-family:system-ui,"Microsoft JhengHei",sans-serif}
-h1{margin:0;font-size:30px}h2{font-size:18px;margin:28px 0 8px;color:#ccc}
-.sub{color:var(--dim);font-size:14px;margin:4px 0 16px}
+h1{margin:0 0 16px;font-size:30px}h2{font-size:18px;margin:28px 0 8px;color:#ccc}
 .stats{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px}
 .stat{background:var(--card);padding:10px 16px;min-width:110px;border-radius:6px}
 .stat b{display:block;font-size:26px;color:var(--gold)}.stat span{font-size:13px;color:var(--dim)}
@@ -29,7 +28,6 @@ table.dt .zero{color:#555;font-weight:normal}table.dt .neg{color:var(--red)}
 .won{color:var(--green)}.lost{color:var(--red)}
 </style></head><body>
 <h1>總排名</h1>
-<div class="sub" id="sub">讀取中…</div>
 <div class="stats" id="stats"></div>
 
 <div class="scroll"><table><thead id="th"></thead><tbody id="tb"></tbody></table></div>
@@ -141,7 +139,7 @@ function render() {
 
 async function refresh() {
   try { data = await (await fetch('/scoreboard/data')).json(); render(); }
-  catch (e) { $('sub').textContent = '連不到伺服器，重試中…'; }
+  catch (e) {}  // 連不到就保留上一次的資料，下一輪再試
 }
 refresh(); setInterval(refresh, 3000);
 </script>
