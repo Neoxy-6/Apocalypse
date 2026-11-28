@@ -9,7 +9,7 @@ from typing import Callable, Iterable
 import requests
 
 __all__ = [
-    "Game", "State", "CityGraph", "TripProblem", "ApiError", "benchmark", "test_local", "play", "draw", "replay", "replay_match", "load_map",
+    "Game", "State", "CityGraph", "TripProblem", "ApiError", "benchmark", "test_local", "play", "player_name", "draw", "replay", "replay_match", "load_map",
     "move", "goto", "pickup", "dropoff", "take_medkit", "use_medkit", "heal", "revive", "wait", "fix",
     "take_weapon", "drop", "drop_medkit", "drop_weapon",
 ]
@@ -512,7 +512,18 @@ def test_local(make_policy: Callable[[], Callable], seeds=(1, 2, 3), name: str =
         replay(games)
     return games
 
-def play(make_policy: Callable[[], Callable], url: str, name: str, role: str = ""):
+def player_name(name: str, number: int | None = None) -> str:
+    """大螢幕和總排名上的名字：有號碼就是「7.小明」，總排名照號碼把每一場的分數加在一起。"""
+    name = str(name).strip()
+    if number is None:
+        return name
+    if isinstance(number, bool) or not isinstance(number, int) or number <= 0:
+        raise ValueError(f"號碼要填助教發的正整數，現在是 {number!r}")
+    return f"{number}.{name}"
+
+
+def play(make_policy: Callable[[], Callable], url: str, name: str, number: int | None = None, role: str = ""):
+    name = player_name(name, number)
     import json, os
     game, store = Game(url), "apocalypse_token.json"
     tokens = {}
@@ -752,7 +763,9 @@ def replay(game, name: str | None = None):
     display(HTML(html))
 
 
-def replay_match(url: str, name: str | None = None):
+def replay_match(url: str, name: str | None = None, number: int | None = None):
+    if name is not None:
+        name = player_name(name, number)
     data = Game(url, timeout=120)._req("GET", "/replay")
     replay(data, name)
     return data
