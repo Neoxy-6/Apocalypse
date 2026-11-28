@@ -326,6 +326,7 @@ namespace Apocalypse
                     parts = t.units.Sum(u => u.parts), escaped = t.units.Any(u => u.escaped),
                 }).ToArray(),
             };
+            Scoreboard.Add(result);
             string json = JsonUtility.ToJson(result, true);
             try
             {

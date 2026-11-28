@@ -58,7 +58,19 @@ namespace Apocalypse
             return true;
         }
         float manualZoom = 0.37f;
-        float lastRestartPress = -9f;
+        float lastRestartPress = -9f, lastScoreResetPress = -9f;
+        string notice; float noticeUntil;
+
+        void Notice(string text, float secs = 2.5f) { notice = text; noticeUntil = Time.unscaledTime + secs; }
+
+        // 只畫在遊戲視窗，轉播畫面不顯示
+        void DrawNotice(float W)
+        {
+            if (drawingStream || notice == null || Time.unscaledTime > noticeUntil) return;
+            var r = new Rect(W / 2f - 300, 90, 600, 52);
+            Pill(r, new Color(0.08f, 0.07f, 0.08f, 0.92f));
+            GUI.Label(r, notice, new GUIStyle(small) { alignment = TextAnchor.MiddleCenter, fontSize = 24, normal = { textColor = new Color(1f, 0.82f, 0.4f) } });
+        }
 
         // 鏡頭跳到地圖矩形的九宮格其中一格：dx −1 左、0 中、1 右；dy 1 上、0 中、−1 下
         // 方位照地圖本身（x 小是左、y 大是上，跟地圖編輯器一樣），不管鏡頭轉到哪

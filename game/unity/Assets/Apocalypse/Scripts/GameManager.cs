@@ -35,6 +35,7 @@ namespace Apocalypse
             Application.targetFrameRate = 60;
             cfg = GameConfig.Load();
             sim = new GameSim(cfg);
+            Scoreboard.Init(cfg.port, cfg.resetScores);
             server = new ApiServer();
             server.Start(cfg.port);
             gameObject.AddComponent<GameStream>();
@@ -286,6 +287,18 @@ namespace Apocalypse
 
                 case "GET /map":
                     req.response = string.IsNullOrEmpty(sim.mapJson) ? "{\"ok\":false,\"error\":\"本場使用隨機地圖，沒有自訂地圖可下載\"}" : sim.mapJson;
+                    return;
+
+                case "GET /scoreboard":
+                {
+                    string page = Path.Combine(Application.streamingAssetsPath, "scoreboard.html");
+                    req.contentType = "text/html; charset=utf-8";
+                    req.response = File.Exists(page) ? File.ReadAllText(page) : "找不到 scoreboard.html";
+                    return;
+                }
+
+                case "GET /scoreboard/data":
+                    req.response = Scoreboard.Json();
                     return;
 
                 case "GET /results":

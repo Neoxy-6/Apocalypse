@@ -976,6 +976,7 @@ namespace Apocalypse
             if (!clean && Sim.status == MatchStatus.Ended) Help(W, H);
             if (Sim.status == MatchStatus.Lobby && !gm.cfg.escape) LobbyPanel(W, H);
             Countdown(W, H);
+            DrawNotice(W);
             if (Sim.status == MatchStatus.Ended)
             {
                 float since = endedAt < 0 ? 0f : Time.unscaledTime - endedAt;
@@ -1036,6 +1037,16 @@ namespace Apocalypse
                 case KeyCode.Alpha7: case KeyCode.Keypad7: ZoomPreset(-1, 1); break;
                 case KeyCode.Alpha8: case KeyCode.Keypad8: ZoomPreset(0, 1); break;
                 case KeyCode.Alpha9: case KeyCode.Keypad9: ZoomPreset(1, 1); break;
+                case KeyCode.K:
+                    // 連按兩下清空總排名（/scoreboard），避免誤觸
+                    if (Time.unscaledTime - lastScoreResetPress < 1.5f)
+                    {
+                        lastScoreResetPress = -9f;
+                        Scoreboard.ResetScores();
+                        Notice("總排名已清空");
+                    }
+                    else { lastScoreResetPress = Time.unscaledTime; Notice($"再按一次 K 清空總排名（目前 {Scoreboard.MatchCount} 場）", 1.5f); }
+                    break;
                 case KeyCode.R:
                     // 連按兩下回準備畫面，避免誤觸把進行中的比賽洗掉
                     if (Sim.status == MatchStatus.Lobby) break;
@@ -1469,7 +1480,7 @@ namespace Apocalypse
         void Help(float W, float H)
         {
             GUI.Label(new Rect(W - 760, H - 34, 744, 24),
-                "<color=#777>Space 開始／結束後回準備畫面　WASD／拖曳 移動鏡頭　點左邊學員／右邊事件 鏡頭跟過去（再點一次回全景）滾輪 縮放　1-9 看地圖九宮格（跟數字鍵盤同位置）　0 全景　Z X C V 速度 ×1 ×2 ×4 ×8　P 暫停　R 連按兩下回準備畫面　H 乾淨轉播模式　L 流暢模式　F11 全螢幕</color>",
+                "<color=#777>Space 開始／結束後回準備畫面　WASD／拖曳 移動鏡頭　點左邊學員／右邊事件 鏡頭跟過去（再點一次回全景）滾輪 縮放　1-9 看地圖九宮格（跟數字鍵盤同位置）　0 全景　Z X C V 速度 ×1 ×2 ×4 ×8　P 暫停　R 連按兩下回準備畫面　K 連按兩下清空總排名　H 乾淨轉播模式　L 流暢模式　F11 全螢幕</color>",
                 new GUIStyle(small) { alignment = TextAnchor.MiddleRight });
         }
 
