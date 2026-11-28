@@ -56,17 +56,26 @@ let ptCols = PTS;
 
 function toggle(n) { open.has(n) ? open.delete(n) : open.add(n); render(); }
 
+// 名字開頭有號碼（「07.小明」「7 小明」）就用號碼認人，名字每場改也會加在一起；沒有號碼就照完整名字
+function keyOf(name) {
+  const s = String(name || '').trim(), m = s.match(/^0*(\d+)\s*[.．。、,，:：\-_ ]/);
+  return m ? '#' + (+m[1]) : s;
+}
+
 function build(d) {
   const ms = d.matches, roster = d.roster || [];
   // 舊版存的紀錄沒有分數來源明細，全部是 0
   ms.forEach(m => m.ranking.forEach(r => { r.noPts = r.score !== 0 && PTS.every(([k]) => !r[k]); }));
-  const counted = r => roster.length ? roster.includes(r.name.trim()) : !r.bot;
-  let names = [...roster];
-  if (!names.length) ms.forEach(m => m.ranking.forEach(r => { const n = r.name.trim(); if (counted(r) && !names.includes(n)) names.push(n); }));
-  const players = names.map(n => {
-    const per = ms.map(m => m.ranking.find(r => r.name.trim() === n) || null);
+  const rkeys = roster.map(keyOf);
+  const counted = r => roster.length ? rkeys.includes(keyOf(r.name)) : !r.bot;
+  let keys = [...new Set(rkeys)];
+  if (!keys.length) ms.forEach(m => m.ranking.forEach(r => { const k = keyOf(r.name); if (counted(r) && !keys.includes(k)) keys.push(k); }));
+  const players = keys.map(k => {
+    const per = ms.map(m => m.ranking.find(r => keyOf(r.name) === k) || null);
     const got = per.filter(x => x);
-    return {name: n, per, played: got.length,
+    // 同一個號碼名字可能每場不一樣，顯示最後一場用的名字
+    const name = got.length ? got[got.length - 1].name.trim() : roster[rkeys.indexOf(k)];
+    return {key: k, name, per, played: got.length,
       total: sum(got.map(r => r.score)),
       escaped: got.filter(r => r.escaped).length,
       best: got.length ? Math.min(...got.map(r => r.rank)) : null,
@@ -105,10 +114,10 @@ function render() {
     + '<th>總分</th><th>場數</th><th>平均名次</th><th>最佳</th><th>逃出</th></tr>';
   const cols = ms.length + 7;
   $('tb').innerHTML = players.map(p => {
-    let h = `<tr class="p${p.rank <= 3 ? ' top' : ''}" data-n="${esc(p.name)}" onclick="toggle(this.dataset.n)"><td>${p.rank}</td><td class="l">${open.has(p.name) ? '▾' : '▸'} ${esc(p.name)}</td>`
+    let h = `<tr class="p${p.rank <= 3 ? ' top' : ''}" data-n="${esc(p.key)}" onclick="toggle(this.dataset.n)"><td>${p.rank}</td><td class="l">${open.has(p.key) ? '▾' : '▸'} ${esc(p.name)}</td>`
       + p.per.map(r => r ? `<td${r.escaped ? ' class="esc"' : ''}>${r.score}</td>` : '<td class="none">—</td>').join('')
       + `<td class="total">${p.total}</td><td>${p.played}</td><td>${p.avgRank == null ? '—' : p.avgRank.toFixed(1)}</td><td>${p.best ?? '—'}</td><td>${p.escaped}</td></tr>`;
-    if (open.has(p.name)) {
+    if (open.has(p.key)) {
       const n = v => v ? v : `<span class="zero">0</span>`;
       const pt = (r, k) => r.noPts ? '<span class="zero">—</span>' : r[k] < 0 ? `<span class="neg">${r[k]}</span>` : r[k] > 0 ? `+${r[k]}` : n(0);
       const row = r => ptCols.map(([k]) => `<td>${pt(r, k)}</td>`).join('') + CNT.map(([k]) => `<td>${n(r[k] || 0)}</td>`).join('');
@@ -123,7 +132,7 @@ function render() {
   }).join('') || `<tr><td colspan="${cols}" class="none l">還沒有比賽結果</td></tr>`;
 
   $('mb').innerHTML = ms.map((m, i) => {
-    const counted = m.ranking.filter(r => roster.length ? roster.includes(r.name.trim()) : !r.bot);
+    const counted = m.ranking.filter(r => roster.length ? roster.map(keyOf).includes(keyOf(r.name)) : !r.bot);
     const top = counted.reduce((a, r) => !a || r.score > a.score ? r : a, null);
     return `<tr><td class="l">第${i + 1}場</td><td class="l">${fmtT(m.finished_at)}</td><td>${m.seed}</td><td>${m.class_won ? '<span class="won">撤離成功</span>' : '<span class="lost">撤離失敗</span>'}</td>`
       + `<td class="l">${esc(m.end_reason)}</td><td>${counted.length}</td><td>${counted.filter(r => r.escaped).length}</td><td>${top ? top.score : '—'}</td><td class="l">${top ? esc(top.name) : '—'}</td></tr>`;
