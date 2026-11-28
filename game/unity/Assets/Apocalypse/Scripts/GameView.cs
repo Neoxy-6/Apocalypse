@@ -973,7 +973,6 @@ namespace Apocalypse
             else { TopBar(W); Leaderboard(W); }
             if (Sim.status != MatchStatus.Ended) DrawBanners(W);
             using (Perf.S("gui_log")) if (!(gm.cfg.escape && Sim.status == MatchStatus.Lobby)) EventLog(W, H);
-            if (!clean && Sim.status == MatchStatus.Ended) Help(W, H);
             if (Sim.status == MatchStatus.Lobby && !gm.cfg.escape) LobbyPanel(W, H);
             Countdown(W, H);
             DrawNotice(W);
@@ -1477,13 +1476,6 @@ namespace Apocalypse
             }
         }
 
-        void Help(float W, float H)
-        {
-            GUI.Label(new Rect(W - 760, H - 34, 744, 24),
-                "<color=#777>Space 開始／結束後回準備畫面　WASD／拖曳 移動鏡頭　點左邊學員／右邊事件 鏡頭跟過去（再點一次回全景）滾輪 縮放　1-9 看地圖九宮格（跟數字鍵盤同位置）　0 全景　Z X C V 速度 ×1 ×2 ×4 ×8　P 暫停　R 連按兩下回準備畫面　K 連按兩下清空總排名　H 乾淨轉播模式　L 流暢模式　F11 全螢幕</color>",
-                new GUIStyle(small) { alignment = TextAnchor.MiddleRight });
-        }
-
         void LobbyPanel(float W, float H)
         {
             var humans = Sim.teams.Where(t => !t.IsBot).ToList();
@@ -1502,7 +1494,6 @@ namespace Apocalypse
                 GUI.Label(new Rect(x, y, 300, 24), $"<color=#{Hex(humans[i].color)}>●</color> {humans[i].name}{(role != "" ? $"  <color=#ffcc80>{role}</color>" : "")}", label);
             }
             if (humans.Count == 0) GUI.Label(new Rect(r.x + 80, r.y + 216, 500, 24), "<color=#777>等待玩家呼叫 POST /join …</color>", label);
-            GUI.Label(new Rect(r.x, r.yMax - 52, r.width, 32), "<b>按 Space 開始比賽</b>", big);
         }
 
         void Countdown(float W, float H)
@@ -1592,7 +1583,6 @@ namespace Apocalypse
                 };
                 for (int c = 0; c < vals.Length; c++) GUI.Label(new Rect(r.x + xs[c], y, 300, 30), vals[c], label);
             }
-            GUI.Label(new Rect(r.x, r.yMax - 44, r.width, 30), "<color=#aaa>按 Space 回到準備畫面（玩家保留）</color>", center);
         }
 
         void CoopResultsPanel(float W, float H)
@@ -1664,7 +1654,6 @@ namespace Apocalypse
                     };
                 for (int c = 0; c < vals.Length; c++) GUI.Label(new Rect(r.x + xs[c], y, 260, 28), vals[c], label);
             }
-            GUI.Label(new Rect(r.x, r.yMax - 40, r.width, 30), "<color=#aaa>按 Space 回到準備畫面（玩家保留）</color>", center);
         }
 
         static string TierName(string tier)
