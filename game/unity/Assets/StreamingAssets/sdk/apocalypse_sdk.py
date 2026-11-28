@@ -518,13 +518,13 @@ def test_local(make_policy: Callable[[], Callable], seeds=(1, 2, 3), name: str =
     return games
 
 def player_name(name: str, number: int | None = None) -> str:
-    """大螢幕和總排名上的名字：有號碼就是「7.小明」，總排名照號碼把每一場的分數加在一起。"""
+    """大螢幕和總排名上的名字：有號碼就是「7 - 小明」，總排名照號碼把每一場的分數加在一起。"""
     name = str(name).strip()
     if number is None:
         return name
     if isinstance(number, bool) or not isinstance(number, int) or number <= 0:
         raise ValueError(f"號碼要填助教發的正整數，現在是 {number!r}")
-    return f"{number}.{name}"
+    return f"{number} - {name}"
 
 
 def play(make_policy: Callable[[], Callable], url: str, name: str, number: int | None = None, role: str = ""):
