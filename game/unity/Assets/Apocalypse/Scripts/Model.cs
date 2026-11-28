@@ -4,6 +4,12 @@ using UnityEngine;
 
 namespace Apocalypse
 {
+    // 分數來源，Player.pts 的索引
+    public static class Pts
+    {
+        public const int Part = 0, Fuel = 1, Rescue = 2, Delivery = 3, Set = 4, Incident = 5, Kill = 6, Revive = 7, Down = 8, Escape = 9, Count = 10;
+    }
+
     public enum NodeType { Road, Shelter, Hospital, Supply, Factory, Generator, Armory }
     public enum TaskType { Delivery, Rescue, Part, Fuel }
     public enum TaskStatus { Announced, Open, Carried, Done, Expired, Locked }
@@ -130,6 +136,7 @@ namespace Apocalypse
         public float protectUntil = -1f;
         public float revivedAt = -999f;
         public int ammo, kills;
+        public readonly int[] pts = new int[Pts.Count];   // 分數來源明細（總排名網頁用），加總等於 score
         public float fireCooldown;
 
         public List<PlanStep> plan = new List<PlanStep>();
@@ -182,4 +189,5 @@ namespace Apocalypse
         public string type, text;
         public int node = -1;
     }
-}
+}
+

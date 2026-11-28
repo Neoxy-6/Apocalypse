@@ -88,7 +88,8 @@ namespace Apocalypse
     [Serializable] public class AdminRequest { public string key; }
     [Serializable] public class OkResponse { public bool ok; public string error; }
 
-    [Serializable] public class ResultRow { public int rank, player_id, score, delivered, rescued, revives, downs, evacuated; public string name, bot, state, tier, role; public float survived, city_reduced; public int parts; public bool escaped; }
+    [Serializable] public class ResultRow { public int rank, player_id, score, delivered, rescued, revives, downs, evacuated; public string name, bot, state, tier, role; public float survived, city_reduced; public int parts, incidents, fuel, kills; public bool escaped;
+        public int pts_part, pts_fuel, pts_rescue, pts_delivery, pts_set, pts_incident, pts_kill, pts_revive, pts_down, pts_escape; }
     [Serializable] public class MatchResult { public string finished_at, end_reason; public bool coop, class_won, escape; public int parts, parts_required; public int seed, match_id; public float duration, ended_at, city_infection; public ResultRow[] ranking; }
 
     public static class Protocol
@@ -324,6 +325,11 @@ namespace Apocalypse
                     tier = IsBaseline(t) || sim.cfg.coop ? "" : Tier(t.Score, randomBest, greedyBest, benchBest),
                     role = t.units[0].role, city_reduced = t.units.Sum(u => u.cityReduced),
                     parts = t.units.Sum(u => u.parts), escaped = t.units.Any(u => u.escaped),
+                    incidents = t.units.Sum(u => u.fixedCount), fuel = t.units.Sum(u => u.fuel), kills = t.units.Sum(u => u.kills),
+                    pts_part = t.units.Sum(u => u.pts[Pts.Part]), pts_fuel = t.units.Sum(u => u.pts[Pts.Fuel]), pts_rescue = t.units.Sum(u => u.pts[Pts.Rescue]),
+                    pts_delivery = t.units.Sum(u => u.pts[Pts.Delivery]), pts_set = t.units.Sum(u => u.pts[Pts.Set]), pts_incident = t.units.Sum(u => u.pts[Pts.Incident]),
+                    pts_kill = t.units.Sum(u => u.pts[Pts.Kill]), pts_revive = t.units.Sum(u => u.pts[Pts.Revive]), pts_down = t.units.Sum(u => u.pts[Pts.Down]),
+                    pts_escape = t.units.Sum(u => u.pts[Pts.Escape]),
                 }).ToArray(),
             };
             Scoreboard.Add(result);

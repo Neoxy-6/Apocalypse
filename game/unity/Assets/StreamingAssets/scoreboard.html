@@ -11,14 +11,21 @@ h1{margin:0;font-size:30px}h2{font-size:18px;margin:28px 0 8px;color:#ccc}
 .stat b{display:block;font-size:26px;color:var(--gold)}.stat span{font-size:13px;color:var(--dim)}
 .scroll{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:18px}
-th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
 th{color:var(--dim);font-weight:normal;font-size:14px}
 td.l,th.l{text-align:left}td.total{font-weight:bold;color:var(--gold)}
 tr.p{cursor:pointer}tr.p:hover{background:#2c2829}
 tr.top td:first-child{color:var(--gold);font-weight:bold}
 .none{color:#555}.esc{color:var(--green)}
-tr.detail td{background:#211f20;padding:4px 10px 12px}
-tr.detail table{font-size:14px}tr.detail th,tr.detail td{border-color:#2e2a2b;padding:4px 8px}
+tr.detail>td{background:#191718;padding:10px 12px 16px 36px;border-left:3px solid var(--gold)}
+table.dt{width:auto;font-size:15px;border:1px solid #3d3738}
+table.dt th,table.dt td{padding:6px 14px;min-width:44px;text-align:left;border:1px solid #3d3738}
+table.dt th{background:#2e2a2b;color:#ddd;font-size:14px}
+table.dt th.grp{background:#352f30;color:var(--gold);font-size:13px}
+table.dt tbody tr:nth-child(even) td{background:#211e1f}
+table.dt tr.sum td{background:#2e2a2b;font-weight:bold;color:var(--gold)}
+table.dt td.k{color:#ff9b8a;font-weight:bold}table.dt td.e{color:#8fd3ff;font-weight:bold}
+table.dt .zero{color:#555;font-weight:normal}table.dt .neg{color:var(--red)}
 .won{color:var(--green)}.lost{color:var(--red)}
 </style></head><body>
 <h1>總排名</h1>
@@ -26,7 +33,6 @@ tr.detail table{font-size:14px}tr.detail th,tr.detail td{border-color:#2e2a2b;pa
 <div class="stats" id="stats"></div>
 
 <div class="scroll"><table><thead id="th"></thead><tbody id="tb"></tbody></table></div>
-<div class="sub">點名字看每場的詳細資料</div>
 
 <h2>場次</h2>
 <div class="scroll"><table><thead><tr><th class="l">場次</th><th class="l">結束時間</th><th>seed</th><th>結果</th><th class="l">結束原因</th><th>人數</th><th>逃出</th><th>最高分</th><th class="l">第一名</th></tr></thead><tbody id="mb"></tbody></table></div>
@@ -42,10 +48,18 @@ const sum = a => a.reduce((x, y) => x + y, 0);
 const fmtT = s => (s || '').replace('T', ' ').slice(5, 16);
 const stateName = {active:'存活', escaped:'逃出', evacuated:'撤離', eliminated:'淘汰', downed:'倒地'};
 
+// 分數來源（伺服器 Pts），從來沒出現過的項目不顯示
+const PTS = [['pts_part', '零件'], ['pts_fuel', '油桶'], ['pts_incident', '事件'], ['pts_kill', '擊殺'], ['pts_rescue', '救援'], ['pts_revive', '扶起'],
+             ['pts_set', '套件獎金'], ['pts_delivery', '配送'], ['pts_escape', '逃出獎金'], ['pts_down', '倒地扣分']];
+const CNT = [['kills', '擊殺'], ['incidents', '事件'], ['revives', '扶起'], ['downs', '倒地']];
+let ptCols = PTS;
+
 function toggle(n) { open.has(n) ? open.delete(n) : open.add(n); render(); }
 
 function build(d) {
   const ms = d.matches, roster = d.roster || [];
+  // 舊版存的紀錄沒有分數來源明細，全部是 0
+  ms.forEach(m => m.ranking.forEach(r => { r.noPts = r.score !== 0 && PTS.every(([k]) => !r[k]); }));
   const counted = r => roster.length ? roster.includes(r.name.trim()) : !r.bot;
   let names = [...roster];
   if (!names.length) ms.forEach(m => m.ranking.forEach(r => { const n = r.name.trim(); if (counted(r) && !names.includes(n)) names.push(n); }));
@@ -58,7 +72,9 @@ function build(d) {
       best: got.length ? Math.min(...got.map(r => r.rank)) : null,
       avgRank: got.length ? sum(got.map(r => r.rank)) / got.length : null,
       downs: sum(got.map(r => r.downs)), revives: sum(got.map(r => r.revives)),
-      rescued: sum(got.map(r => r.rescued)), delivered: sum(got.map(r => r.delivered)), parts: sum(got.map(r => r.parts))};
+      rescued: sum(got.map(r => r.rescued)), parts: sum(got.map(r => r.parts)),
+      kills: sum(got.map(r => r.kills || 0)), incidents: sum(got.map(r => r.incidents || 0)), fuel: sum(got.map(r => r.fuel || 0)),
+      ...Object.fromEntries(PTS.map(([k]) => [k, sum(got.map(r => r[k] || 0))])), noPts: got.length > 0 && got.every(r => r.noPts)};
   });
   players.sort((a, b) => b.total - a.total || (a.avgRank ?? 99) - (b.avgRank ?? 99) || a.name.localeCompare(b.name));
   let rank = 0, prev = null;
@@ -70,12 +86,16 @@ function render() {
   if (!data) return;
   const {ms, players, roster} = build(data);
   const all = players.flatMap(p => p.per.filter(x => x));
+  ptCols = PTS.filter(([k]) => all.some(r => r[k]));
+  if (!ptCols.length) ptCols = PTS.slice(0, 6);
   $('sub').textContent = `每 3 秒自動更新 · 最後更新 ${new Date().toLocaleTimeString()}`;
   $('stats').innerHTML = [
     [ms.length, '已打場數'],
     [players.length, roster.length ? '名單人數' : '參賽人數'],
-    [`${ms.filter(m => m.class_won).length}/${ms.length}`, '全班勝場'],
-    [all.filter(r => r.escaped).length, '逃出人次'],
+    [`${ms.filter(m => m.class_won).length}/${ms.length}`, '勝場'],
+    [all.filter(r => r.escaped).length, '逃出人數'],
+    [sum(all.map(r => r.kills || 0)), '總擊殺'],
+    [sum(all.map(r => r.incidents || 0)), '完成事件'],
     [sum(all.map(r => r.downs)), '倒地次數'],
     [sum(all.map(r => r.revives)), '扶起隊友'],
     [players.length ? players[0].total : 0, '目前最高總分'],
@@ -89,18 +109,23 @@ function render() {
       + p.per.map(r => r ? `<td${r.escaped ? ' class="esc"' : ''}>${r.score}</td>` : '<td class="none">—</td>').join('')
       + `<td class="total">${p.total}</td><td>${p.played}</td><td>${p.avgRank == null ? '—' : p.avgRank.toFixed(1)}</td><td>${p.best ?? '—'}</td><td>${p.escaped}</td></tr>`;
     if (open.has(p.name)) {
-      h += `<tr class="detail"><td colspan="${cols}"><table><tr><th class="l">場次</th><th>名次</th><th>分數</th><th class="l">結果</th><th>存活秒數</th><th>送達</th><th>救援</th><th>扶起</th><th>倒地</th><th>零件</th></tr>`
-        + p.per.map((r, i) => r ? `<tr><td class="l">第${i + 1}場</td><td>${r.rank}</td><td>${r.score}</td><td class="l">${r.escaped ? '<span class="esc">逃出</span>' : esc(stateName[r.state] || r.state)}</td><td>${Math.round(r.survived)}</td><td>${r.delivered}</td><td>${r.rescued}</td><td>${r.revives}</td><td>${r.downs}</td><td>${r.parts}</td></tr>`
-                                : `<tr><td class="l">第${i + 1}場</td><td colspan="9" class="none l">沒參加</td></tr>`).join('')
-        + `<tr><td class="l"><b>合計</b></td><td></td><td><b>${p.total}</b></td><td class="l">逃出 ${p.escaped} 次</td><td></td><td>${p.delivered}</td><td>${p.rescued}</td><td>${p.revives}</td><td>${p.downs}</td><td>${p.parts}</td></tr></table></td></tr>`;
+      const n = v => v ? v : `<span class="zero">0</span>`;
+      const pt = (r, k) => r.noPts ? '<span class="zero">—</span>' : r[k] < 0 ? `<span class="neg">${r[k]}</span>` : r[k] > 0 ? `+${r[k]}` : n(0);
+      const row = r => ptCols.map(([k]) => `<td>${pt(r, k)}</td>`).join('') + CNT.map(([k]) => `<td>${n(r[k] || 0)}</td>`).join('');
+      h += `<tr class="detail"><td colspan="${cols}"><table class="dt"><thead>`
+        + `<tr><th class="grp" colspan="5">每場結果</th><th class="grp" colspan="${ptCols.length}">任務與戰鬥分數</th><th class="grp" colspan="${CNT.length}">次數</th></tr>`
+        + `<tr><th>場次</th><th>名次</th><th>分數</th><th>結果</th><th>存活秒數</th>` + ptCols.map(([, t]) => `<th>${t}</th>`).join('') + CNT.map(([, t]) => `<th>${t}</th>`).join('') + `</tr></thead><tbody>`
+        + p.per.map((r, i) => r ? `<tr><td>第${i + 1}場</td><td>${r.rank}</td><td><b>${r.score}</b></td><td>${r.escaped ? '<span class="esc">逃出</span>' : esc(stateName[r.state] || r.state)}</td><td>${Math.round(r.survived)}</td>${row(r)}</tr>`
+                                : `<tr><td>第${i + 1}場</td><td colspan="${4 + ptCols.length + CNT.length}" class="none">沒參加</td></tr>`).join('')
+        + `<tr class="sum"><td>合計</td><td>—</td><td>${p.total}</td><td>逃出 ${p.escaped} 次</td><td>—</td>${row(p)}</tr></tbody></table></td></tr>`;
     }
     return h;
-  }).join('') || `<tr><td colspan="${cols}" class="none l">還沒有比賽結果，打完一場會自動出現</td></tr>`;
+  }).join('') || `<tr><td colspan="${cols}" class="none l">還沒有比賽結果</td></tr>`;
 
   $('mb').innerHTML = ms.map((m, i) => {
     const counted = m.ranking.filter(r => roster.length ? roster.includes(r.name.trim()) : !r.bot);
     const top = counted.reduce((a, r) => !a || r.score > a.score ? r : a, null);
-    return `<tr><td class="l">第${i + 1}場</td><td class="l">${fmtT(m.finished_at)}</td><td>${m.seed}</td><td>${m.class_won ? '<span class="won">全班勝</span>' : '<span class="lost">全班敗</span>'}</td>`
+    return `<tr><td class="l">第${i + 1}場</td><td class="l">${fmtT(m.finished_at)}</td><td>${m.seed}</td><td>${m.class_won ? '<span class="won">撤離成功</span>' : '<span class="lost">撤離失敗</span>'}</td>`
       + `<td class="l">${esc(m.end_reason)}</td><td>${counted.length}</td><td>${counted.filter(r => r.escaped).length}</td><td>${top ? top.score : '—'}</td><td class="l">${top ? esc(top.name) : '—'}</td></tr>`;
   }).join('') || '<tr><td colspan="9" class="none l">還沒有</td></tr>';
 

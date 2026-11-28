@@ -234,7 +234,10 @@ namespace Apocalypse
             p.noiseTimer = 0; p.lastScream = -999;
             p.downs = 0; p.evacuated = false; p.cityReduced = 0; p.parts = 0; p.escaped = false; p.fixedCount = 0; p.fuel = 0; p.combo = 0; p.lastScoreAt = -999f; p.protectUntil = -1f; p.revivedAt = -999f;
             p.ammo = 0; p.kills = 0; p.fireCooldown = 0f;
+            System.Array.Clear(p.pts, 0, p.pts.Length);
         }
+
+        static void Award(Player p, int v, int kind) { p.score += v; p.pts[kind] += v; }
 
         public readonly List<Team> teams = new List<Team>();
         int nextTeamId;
@@ -725,7 +728,7 @@ namespace Apocalypse
             {
                 var q = PlayerById(kv.Key);
                 if (q == null) continue;
-                q.score += ComboGain(q, Mathf.RoundToInt(reward * kv.Value / total));
+                Award(q, ComboGain(q, Mathf.RoundToInt(reward * kv.Value / total)), Pts.Incident);
                 q.fixedCount++;
             }
             foreach (var p in workers) { p.pending = null; p.actionTimer = 0; }
@@ -1541,7 +1544,7 @@ namespace Apocalypse
                 }
                 if (best == null) continue;
                 zombies.Remove(best);
-                p.ammo--; p.kills++; p.score += cfg.killReward;
+                p.ammo--; p.kills++; Award(p, cfg.killReward, Pts.Kill);
                 p.fireCooldown = cfg.weaponInterval;
                 playerShots.Add((p.pos, best.pos, time));
                 if (playerShots.Count > 30) playerShots.RemoveAt(0);
@@ -1651,7 +1654,7 @@ namespace Apocalypse
                         gain = Mathf.RoundToInt(gain * cfg.partDecay / (cfg.partDecay + p.parts));
                     if (useless) gain = 0;
                     else if (cfg.escape) gain = ComboGain(p, gain);
-                    p.score += gain;
+                    Award(p, gain, t.type == TaskType.Part ? Pts.Part : t.type == TaskType.Fuel ? Pts.Fuel : t.type == TaskType.Rescue ? Pts.Rescue : Pts.Delivery);
                     t.status = TaskStatus.Done; t.carrier = -1; t.completedBy = p.id; t.expiresAt = time; t.doneVisit = p.visit;
                     foreach (var x in tasks)
                         if (x.after == t.id && x.status == TaskStatus.Locked)
@@ -1671,7 +1674,7 @@ namespace Apocalypse
                         int got = tasks.Count(x => x.set == t.set && x.status == TaskStatus.Done && x.completedBy == p.id && x.doneVisit == p.visit);
                         if (got == t.setSize)
                         {
-                            p.score += t.setBonus;
+                            Award(p, t.setBonus, Pts.Set);
                             Log("set", $"{p.name} 一趟交齊整套零件（{got} 件），套件獎金 +{t.setBonus}", p.node);
                         }
                     }
@@ -1687,7 +1690,7 @@ namespace Apocalypse
                             {
                                 var q = PlayerById(kv.Key);
                                 int share = Mathf.RoundToInt((float)b.bonus * kv.Value / b.tasks.Count);
-                                q.score += share;
+                                Award(q, share, Pts.Delivery);
                                 ReduceCity(q, share);
                             }
                             Log("batch", $"批次合約 B{b.id} 準時完成！合約獎金 +{b.bonus}（{b.by.Count} 人合力）", p.node);
@@ -1698,7 +1701,7 @@ namespace Apocalypse
                     if (b != null && !b.paid && !b.failed && b.owner == p.team.id && b.delivered >= b.tasks.Count)
                     {
                         b.paid = true;
-                        p.score += b.bonus;
+                        Award(p, b.bonus, Pts.Delivery);
                         Log("batch", $"{p.team.name} 準時完成批次合約 B{b.id}，合約獎金 +{b.bonus}", p.node);
                     }
                     break;
@@ -1724,7 +1727,7 @@ namespace Apocalypse
                     bool fresh = time - t.revivedAt >= 30f;
                     t.revivedAt = time;
                     int bonus = fresh ? cfg.reviveBonus : 0;
-                    p.score += cfg.escape && fresh ? ComboGain(p, bonus) : bonus;
+                    Award(p, cfg.escape && fresh ? ComboGain(p, bonus) : bonus, Pts.Revive);
                     if (fresh) p.revives++;
                     Log("revive", $"{p.name} 救起了 {t.name}" + (fresh ? $" +{bonus}" : ""), p.node);
                     break;
@@ -1772,7 +1775,7 @@ namespace Apocalypse
             p.ammo = 0;
             p.downs++;
             int penalty = cfg.respawnPenalty * (cfg.escape ? Mathf.Min(p.downs, 3) : 1);
-            p.score -= penalty;
+            Award(p, -penalty, Pts.Down);
             p.combo = 0; p.lastScoreAt = -999f;
             cityInfection += 1f;
             p.eliminatedReason = reason;
@@ -2098,7 +2101,7 @@ namespace Apocalypse
                         if (p.state == PlayerState.Active && p.nextNode < 0 && p.node == extraction)
                         {
                             p.escaped = true;
-                            p.score += cfg.escapeBonus + Mathf.RoundToInt(TimeLeft * cfg.earlyBonusPerSec);
+                            Award(p, cfg.escapeBonus + Mathf.RoundToInt(TimeLeft * cfg.earlyBonusPerSec), Pts.Escape);
                         }
                     endReason = $"直升機起飛！{players.Count(p => p.escaped)}/{players.Count} 人逃出城市";
                 }
@@ -2112,12 +2115,12 @@ namespace Apocalypse
                 if (classWon)
                 {
                     endReason = "全班撐過了！城市守住了";
-                    foreach (var p in players) p.score += cfg.classBonus;
+                    foreach (var p in players) Award(p, cfg.classBonus, Pts.Escape);
                 }
                 foreach (var p in players)
                     if (p.state == PlayerState.Active && p.nextNode < 0 && map.nodes[p.node].Safe)
                     {
-                        p.score += cfg.survivalBonus;
+                        Award(p, cfg.survivalBonus, Pts.Escape);
                         p.evacuated = true;
                     }
             }
