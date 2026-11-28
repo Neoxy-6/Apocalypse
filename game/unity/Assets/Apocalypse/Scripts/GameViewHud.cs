@@ -201,7 +201,8 @@ namespace Apocalypse
 
                 bool gone = u.state == PlayerState.Eliminated || (Sim.status == MatchStatus.Ended && !u.escaped),
                      downed = !gone && u.state == PlayerState.Downed;
-                Pill(new Rect(x, y, w, rowH - 6), u.id == follow ? new Color(0.30f, 0.26f, 0.27f, 0.9f) : WcDark);
+                bool hover = HudRow(new Rect(x, y, w, rowH - 6), u.id, -1);
+                Pill(new Rect(x, y, w, rowH - 6), u.id == follow ? new Color(0.30f, 0.26f, 0.27f, 0.9f) : hover ? new Color(0.24f, 0.21f, 0.22f, 0.9f) : WcDark);
                 Pill(new Rect(x + 4, y + 4, 34, rowH - 14), i < 3 ? WcBeige : WcTaupe);
                 GUI.Label(new Rect(x + 4, y + 4, 34, rowH - 14), $"<color={(i < 3 ? "#3a3233" : "#f2ebe6")}>{i + 1}</color>", wcRank);
                 var dot = gone || downed ? new Color(1, 1, 1, 0.25f) : t.color;
@@ -234,7 +235,8 @@ namespace Apocalypse
                 float y = y0 + i * rowH;
                 var c = IncidentColor(inc.kind);
                 float left = inc.deadline - Sim.time;
-                Pill(new Rect(x, y, w, rowH - 8), inc.id == focusIncident ? new Color(0.30f, 0.26f, 0.27f, 0.92f) : WcDark);
+                bool hover = HudRow(new Rect(x, y, w, rowH - 8), -1, inc.id);
+                Pill(new Rect(x, y, w, rowH - 8), inc.id == focusIncident ? new Color(0.30f, 0.26f, 0.27f, 0.92f) : hover ? new Color(0.24f, 0.21f, 0.22f, 0.92f) : WcDark);
                 Pill(new Rect(x + 14, y + 15, 12, 12), c);
                 GUI.Label(new Rect(x + 34, y, 170, rowH - 18), $"<color=#f6f1ee>{inc.name}</color>", wcName);
                 string ppl = inc.workers > 0 ? $"<color=#9be7b0>{inc.workers} 人</color>  " : "";

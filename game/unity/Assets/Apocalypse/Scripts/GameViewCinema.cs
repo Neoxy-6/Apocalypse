@@ -18,23 +18,44 @@ namespace Apocalypse
         Vector2? manualTarget;
         int focusIncident = -1;
 
-        void CycleStudent(int step)
+        // 左邊學員、右邊事件的每一列在畫面上的位置（介面座標，1080 高），滑鼠點到就把鏡頭切過去
+        readonly List<(Rect rect, int player, int incident)> hudRows = new List<(Rect, int, int)>();
+        bool drawingStream, hudPress;
+
+        Vector2 MouseGui()
         {
-            var ids = Sim.Ranking().Select(t => t.units[0]).Where(u => u.state != PlayerState.Eliminated).Select(u => u.id).ToList();
-            if (ids.Count == 0) return;
-            int i = ids.IndexOf(follow);
-            follow = ids[i < 0 ? (step > 0 ? 0 : ids.Count - 1) : (i + step + ids.Count) % ids.Count];
-            manualTarget = null; focusIncident = -1;
+            float s = Screen.height / 1080f;
+            var m = Input.mousePosition;
+            return new Vector2(m.x / s, (Screen.height - m.y) / s);
         }
 
-        void CycleIncident(int step)
+        // 這一列要不要記下來給滑鼠點（只記遊戲視窗上的，轉播畫面不算）；回傳滑鼠是不是停在上面
+        bool HudRow(Rect r, int player, int incident)
         {
-            var list = ActiveIncidents();
-            if (list.Count == 0) return;
-            int i = list.FindIndex(x => x.id == focusIncident);
-            focusIncident = list[i < 0 ? (step > 0 ? 0 : list.Count - 1) : (i + step + list.Count) % list.Count].id;
-            follow = -1; manualTarget = null;
+            if (drawingStream) return false;
+            hudRows.Add((r, player, incident));
+            return r.Contains(MouseGui());
+        }
+
+        bool ClickHudRow()
+        {
+            var m = MouseGui();
+            int k = hudRows.FindIndex(h => h.rect.Contains(m));
+            if (k < 0) return false;
+            var h = hudRows[k];
+            manualTarget = null; userZoom = null;
+            if (h.player >= 0)
+            {
+                follow = follow == h.player ? -1 : h.player;   // 再點一次同一個人就回全景
+                focusIncident = -1;
+            }
+            else
+            {
+                focusIncident = focusIncident == h.incident ? -1 : h.incident;
+                follow = -1;
+            }
             lastCut = Time.unscaledTime;
+            return true;
         }
         float manualZoom = 0.37f;
         float lastRestartPress = -9f;
@@ -65,7 +86,9 @@ namespace Apocalypse
             var mouse = Input.mousePosition;
             bool held = Input.GetMouseButton(0) || Input.GetMouseButton(1) || Input.GetMouseButton(2);
             bool pressed = Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1) || Input.GetMouseButtonDown(2);
-            Vector2 drag = held && !pressed ? (Vector2)(mouse - lastMouse) : Vector2.zero;
+            if (!held) hudPress = false;
+            // 在學員／事件列上按下去的那一下是「選」，不是拖曳鏡頭
+            Vector2 drag = held && !pressed && !hudPress ? (Vector2)(mouse - lastMouse) : Vector2.zero;
             lastMouse = mouse;
             if (dir == Vector2.zero && drag.sqrMagnitude < 0.01f) return;
 

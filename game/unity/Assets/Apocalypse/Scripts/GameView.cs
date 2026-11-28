@@ -941,9 +941,11 @@ namespace Apocalypse
             GL.PushMatrix();
             GL.LoadPixelMatrix(0, rt.width, rt.height, 0);
             guiPixW = rt.width; guiPixH = rt.height;
+            drawingStream = true;
             try { DrawGui(); }
             finally
             {
+                drawingStream = false;
                 GL.PopMatrix();
                 RenderTexture.active = prevActive;
                 cam.targetTexture = prevTarget;
@@ -958,6 +960,7 @@ namespace Apocalypse
         {
             float s = guiPixH / 1080f;
             GUI.matrix = Matrix4x4.Scale(new Vector3(s, s, 1));
+            if (!drawingStream) hudRows.Clear();
             float W = guiPixW / s, H = 1080f;
 
             using (Perf.S("gui_labels")) WorldLabels(s);
@@ -989,6 +992,12 @@ namespace Apocalypse
                 e.Use();
                 return;
             }
+            if (e.type == EventType.MouseDown && e.button == 0 && ClickHudRow())
+            {
+                hudPress = true;
+                e.Use();
+                return;
+            }
             if (e.type != EventType.KeyDown) return;
             if (editingUrl && Sim.status == MatchStatus.Lobby) return;
             var alive = Sim.players.Where(p => p.state != PlayerState.Eliminated).Select(p => p.id).ToList();
@@ -1005,10 +1014,6 @@ namespace Apocalypse
                     follow = i + 1 < alive.Count ? alive[i + 1] : -1;
                     manualTarget = null;
                     break;
-                case KeyCode.UpArrow: CycleStudent(-1); break;
-                case KeyCode.DownArrow: CycleStudent(1); break;
-                case KeyCode.LeftArrow: CycleIncident(-1); break;
-                case KeyCode.RightArrow: CycleIncident(1); break;
                 case KeyCode.H: clean = !clean; break;
                 case KeyCode.L: SetLowFx(!lowFx, true); break;
                 case KeyCode.F11:
@@ -1464,7 +1469,7 @@ namespace Apocalypse
         void Help(float W, float H)
         {
             GUI.Label(new Rect(W - 760, H - 34, 744, 24),
-                "<color=#777>Space 開始／結束後回準備畫面　WASD／拖曳 移動鏡頭　↑↓ 看學員　←→ 看事件　滾輪 縮放　1-9 看地圖九宮格（跟數字鍵盤同位置）　0 全景　Z X C V 速度 ×1 ×2 ×4 ×8　P 暫停　R 連按兩下回準備畫面　H 乾淨轉播模式　L 流暢模式　F11 全螢幕</color>",
+                "<color=#777>Space 開始／結束後回準備畫面　WASD／拖曳 移動鏡頭　點左邊學員／右邊事件 鏡頭跟過去（再點一次回全景）滾輪 縮放　1-9 看地圖九宮格（跟數字鍵盤同位置）　0 全景　Z X C V 速度 ×1 ×2 ×4 ×8　P 暫停　R 連按兩下回準備畫面　H 乾淨轉播模式　L 流暢模式　F11 全螢幕</color>",
                 new GUIStyle(small) { alignment = TextAnchor.MiddleRight });
         }
 
