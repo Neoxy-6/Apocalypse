@@ -54,7 +54,7 @@ let ptCols = PTS;
 
 function toggle(n) { open.has(n) ? open.delete(n) : open.add(n); render(); }
 
-// 名字開頭有號碼（「07.小明」「7 小明」）就用號碼認人，名字每場改也會加在一起；沒有號碼就照完整名字
+// 名字開頭有號碼（「7 - 小明」「07.小明」「7 小明」）就用號碼認人，名字每場改也會加在一起；沒有號碼就照完整名字
 function keyOf(name) {
   const s = String(name || '').trim(), m = s.match(/^0*(\d+)\s*[.．。、,，:：\-_ ]/);
   return m ? '#' + (+m[1]) : s;
