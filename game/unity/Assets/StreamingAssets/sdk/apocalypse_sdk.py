@@ -359,9 +359,14 @@ class TripProblem:
         return steps
 
 
+def _local(url: str) -> str:
+    # 遊戲只聽 IPv4，Windows 上 requests 連 localhost 會先試 IPv6 被拒，每次新連線卡 2 秒
+    return url.replace("://localhost:", "://127.0.0.1:").replace("://localhost/", "://127.0.0.1/")
+
+
 class Game:
     def __init__(self, url: str, token: str | None = None, timeout: float = 10.0):
-        self.url = url.rstrip("/")
+        self.url = _local(url.rstrip("/"))
         self.token = token
         self.timeout = timeout
         self.session = requests.Session()
@@ -460,7 +465,7 @@ def load_map(src):
         return src
     src = str(src)
     if src.startswith("http"):
-        data = requests.get(src.rstrip("/") + "/map", timeout=10).json()
+        data = requests.get(_local(src.rstrip("/")) + "/map", timeout=10).json()
         if data.get("ok") is False:
             raise ApiError(data.get("error", "伺服器沒有提供自訂地圖"))
         return data
